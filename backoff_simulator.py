@@ -124,15 +124,24 @@ def expo(base: int, cap: float) -> Iterator[float]:
     return (min(cap, base * 2**n) for n in count())
 
 
-def expo_full_jitter(base: int, cap: float) -> Iterator[float]:
-    return (random.uniform(0, t) for t in expo(base, cap))
+def full_jitter(raw: Iterator[float]) -> Iterator[float]:
+    return (random.uniform(0, t) for t in raw)
+
+
+def half_jitter(raw: Iterator[float]) -> Iterator[float]:
+    return (t / 2 + random.uniform(0, t / 2) for t in raw)
+
+
+def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[float]:
+    return (t + random.gauss(mu, sigma) for t in raw)
 
 
 async def main():
     simulations = [
-        Simulation(5, repeat(3), 2, "always 3"),
-        Simulation(5, expo(2, 10), 2, "expo"),
-        Simulation(5, expo_full_jitter(2, 10), 2, "expo full jitter"),
+        Simulation(2, repeat(3), 2, "always 3"),
+        Simulation(2, full_jitter(expo(2, 10)), 100, "full jitered expo"),
+        Simulation(2, half_jitter(expo(2, 10)), 100, "half jittered expo"),
+        Simulation(2, normal_jitter(expo(2, 10), 0, 1), 100, "normal jittered expo"),
     ]
     for sim in simulations:
         await sim.run()
