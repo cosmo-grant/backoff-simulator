@@ -35,12 +35,6 @@ from itertools import count, repeat
 from typing import Iterator
 
 
-def tprint(start: float, *args, **kwargs):
-    elapsed = time.monotonic() - start
-    assert elapsed >= 0
-    print(f"{elapsed:.2f}:", *args, **kwargs)
-
-
 class Server:
     """
     Simulates a server receiving contending write requests over the network.
@@ -50,23 +44,20 @@ class Server:
         - if unavailable, it rejects it
     """
 
-    def __init__(self, duration: int):
+    def __init__(self, busy_for: int):
         self.available = True
-        self.duration = duration
-        self.first_receive_time: float | None = None
+        self.busy_for = busy_for
+        self.events: list[tuple[float, str]] = []
 
     async def receive(self, id: int) -> bool:
-        if self.first_receive_time is None:
-            self.first_receive_time = time.monotonic()
-
         if self.available:
-            tprint(self.first_receive_time, f"accepted client {id}")
+            self.events.append((time.monotonic(), f"accepted client {id}"))
             self.available = False
-            await asyncio.sleep(self.duration)
+            await asyncio.sleep(self.busy_for)
             self.available = True
             return True
         else:
-            tprint(self.first_receive_time, f"rejected client {id}")
+            self.events.append((time.monotonic(), f"rejected client {id}"))
             return False
 
 
@@ -97,27 +88,25 @@ class Client:
 
 
 class Simulation:
-    def __init__(self, server_duration: int, backoffs: Iterator[float], num_clients: int, label: str):
-        self.server = Server(server_duration)
+    def __init__(self, busy_for: int, backoffs: Iterator[float], num_clients: int, label: str):
+        self.server = Server(busy_for)
         self.backoffs = backoffs
         self.clients = [Client(self.server, backoffs) for _ in range(num_clients)]
         self.num_clients = num_clients
         self.label = label
-        self.start: float
-        self.completion_time: float
+        self.start_time: float
+        self.end_time: float
 
     async def run(self):
-        print(f"== {self.label} ==")
-        self.start = time.monotonic()
+        self.start_time = time.monotonic()
         await asyncio.gather(*(client.send() for client in self.clients))
-        self.completion_time = time.monotonic()
-        print()
+        self.end_time = time.monotonic()
 
     def total_requests(self) -> int:
         return sum(client.request_count for client in self.clients)
 
     def duration(self) -> float:
-        return self.completion_time - self.start
+        return self.end_time - self.start_time
 
 
 def expo(base: int, cap: float) -> Iterator[float]:
@@ -138,10 +127,10 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
 
 async def main():
     simulations = [
-        Simulation(2, repeat(3), 2, "always 3"),
-        Simulation(2, full_jitter(expo(2, 10)), 100, "full jitered expo"),
-        Simulation(2, half_jitter(expo(2, 10)), 100, "half jittered expo"),
-        Simulation(2, normal_jitter(expo(2, 10), 0, 1), 100, "normal jittered expo"),
+        Simulation(1, repeat(3), 2, "always 3"),
+        Simulation(1, full_jitter(expo(2, 10)), 20, "full jittered expo"),
+        # Simulation(1, half_jitter(expo(2, 10)), 50, "half jittered expo"),
+        # Simulation(1, normal_jitter(expo(2, 10), 0, 1), 50, "normal jittered expo"),
     ]
     for sim in simulations:
         await sim.run()
