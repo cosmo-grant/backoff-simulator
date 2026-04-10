@@ -104,14 +104,20 @@ class Simulation:
         self.num_clients = num_clients
         self.label = label
         self.start: float
+        self.completion_time: float
 
     async def run(self):
         print(f"== {self.label} ==")
         self.start = time.monotonic()
         await asyncio.gather(*(client.send() for client in self.clients))
-        print(f"TOTAL REQUESTS: {sum(client.request_count for client in self.clients)}")
-        print(f"COMPLETION TIME: {round(time.monotonic() - self.start)}s")
+        self.completion_time = time.monotonic()
         print()
+
+    def total_requests(self) -> int:
+        return sum(client.request_count for client in self.clients)
+
+    def duration(self) -> float:
+        return self.completion_time - self.start
 
 
 def expo(base: int, cap: float) -> Iterator[float]:
@@ -130,6 +136,9 @@ async def main():
     ]
     for sim in simulations:
         await sim.run()
+
+    for sim in simulations:
+        print(f"{sim.label}: {sim.total_requests()} requests in {sim.duration():.2f}s")
 
 
 if __name__ == "__main__":
