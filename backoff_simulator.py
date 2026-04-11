@@ -27,12 +27,17 @@ There's a famous aws blog post and simulation script about this:
 This script is my own exploration.
 """
 
+import heapq
 import random
-
-import asyncio
-import time
+from dataclasses import dataclass, field
 from itertools import count, repeat
-from typing import Iterator, Callable
+from typing import Callable, Iterator
+
+
+@dataclass(order=True)
+class ScheduledTask:
+    time: float
+    task: Callable = field(compare=False)
 
 
 class Server:
@@ -47,18 +52,15 @@ class Server:
     def __init__(self, busy_for: int):
         self.available = True
         self.busy_for = busy_for
-        self.events: list[tuple[float, str]] = []
 
-    async def receive(self, id: int) -> bool:
-        if self.available:
-            self.events.append((time.monotonic(), f"accepted client {id}"))
-            self.available = False
-            await asyncio.sleep(self.busy_for)
-            self.available = True
-            return True
-        else:
-            self.events.append((time.monotonic(), f"rejected client {id}"))
-            return False
+    def receive(self) -> bool:
+        accepted = self.available
+        self.available = False
+
+        return accepted
+
+    def free(self) -> None:
+        self.available = True
 
 
 class Client:
@@ -69,43 +71,50 @@ class Client:
     If a request fails, it backs off and retries.
     """
 
-    ids = count()
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id!r})"
 
-    def __init__(self, server: Server, backoffs: Iterator[float]):
-        self.id = next(self.ids)
+    def __init__(self, id: int, server: Server, backoffs: Iterator[float]):
+        self.id = id
         self.server = server
         self.backoffs = backoffs
         self.request_count = 0
 
-    async def send(self):
-        accepted = False
-        while True:
-            accepted = await self.server.receive(self.id)
-            self.request_count += 1
-            if accepted:
-                break
-            await asyncio.sleep(next(self.backoffs))
+    def send(self) -> tuple[float, Callable]:
+        self.request_count += 1
+        accepted = self.server.receive()
+        if accepted:
+            return (self.server.busy_for, self.server.free)
+        else:
+            return (next(self.backoffs), self.send)
 
 
 class Simulation:
     def __init__(self, busy_for: int, backoffs_factory: Callable[[], Iterator[float]], num_clients: int, label: str):
+        self.time = 0.0  # virtual clock
+        self.todo: list[ScheduledTask] = []  # heap
         self.server = Server(busy_for)
-        self.clients = [Client(self.server, backoffs_factory()) for _ in range(num_clients)]
+        self.clients = [Client(i, self.server, backoffs_factory()) for i in range(num_clients)]
         self.num_clients = num_clients
         self.label = label
-        self.start_time: float
-        self.end_time: float
 
-    async def run(self):
-        self.start_time = time.monotonic()
-        await asyncio.gather(*(client.send() for client in self.clients))
-        self.end_time = time.monotonic()
+    def run(self):
+        for client in self.clients:
+            heapq.heappush(self.todo, ScheduledTask(0.0, client.send))
+
+        while self.todo:
+            task = heapq.heappop(self.todo)
+            self.time = task.time
+            todo = task.task()
+            if todo:
+                delay, task = todo
+                heapq.heappush(self.todo, ScheduledTask(self.time + delay, task))
 
     def total_requests(self) -> int:
         return sum(client.request_count for client in self.clients)
 
     def duration(self) -> float:
-        return self.end_time - self.start_time
+        return self.time
 
 
 def expo(base: int, cap: float) -> Iterator[float]:
@@ -124,17 +133,17 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
     return (t + random.gauss(mu, sigma) for t in raw)
 
 
-async def main():
+def main():
     simulations = [
         Simulation(1, lambda: repeat(3), 2, "always 3"),
-        Simulation(1, lambda: full_jitter(expo(2, 10)), 20, "full jittered expo"),
+        # Simulation(1, lambda: full_jitter(expo(2, 10)), 20, "full jittered expo"),
     ]
     for sim in simulations:
-        await sim.run()
+        sim.run()
 
     for sim in simulations:
-        print(f"{sim.label}: {sim.total_requests()} requests in {sim.duration():.2f}s")
+        print(f"{sim.label}: {sim.total_requests()} requests, {sim.duration():.2f}s duration")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
