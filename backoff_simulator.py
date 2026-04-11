@@ -132,7 +132,7 @@ def half_jitter(raw: Iterator[float]) -> Iterator[float]:
 
 
 def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[float]:
-    return (t + random.gauss(mu, sigma) for t in raw)
+    return (max(0, t + random.gauss(mu, sigma)) for t in raw)
 
 
 def main():
