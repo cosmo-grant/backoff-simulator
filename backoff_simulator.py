@@ -40,6 +40,15 @@ class ScheduledTask:
     task: Callable = field(compare=False)
 
 
+class Network:
+    def __init__(self, mu: float, sigma: float):
+        self.mu = mu
+        self.sigma = sigma
+
+    def delay(self) -> float:
+        return max(0, random.gauss(self.mu, self.sigma))
+
+
 class Server:
     """
     Simulates a server receiving contending write requests over the network.
@@ -74,19 +83,28 @@ class Client:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id!r})"
 
-    def __init__(self, id: int, server: Server, backoffs: Iterator[float]):
+    def __init__(self, id: int, network: Network, server: Server, backoffs: Iterator[float]):
         self.id = id
+        self.network = network
         self.server = server
         self.backoffs = backoffs
         self.request_count = 0
 
     def send(self) -> tuple[float, Callable, str]:
         self.request_count += 1
+        return (self.network.delay(), self.receive, f"client {self.id} sent")
+
+    def receive(self):
         accepted = self.server.receive()
         if accepted:
             return (self.server.busy_for, self.server.free, f"client {self.id} accepted")
         else:
-            return (next(self.backoffs), self.send, f"client {self.id} rejected")
+            return (
+                self.network.delay()  # server -> client
+                + next(self.backoffs),
+                self.send,
+                f"client {self.id} rejected",
+            )
 
 
 class Simulation:
@@ -95,7 +113,8 @@ class Simulation:
         self.todo: list[ScheduledTask] = []  # heap
         self.history: list[tuple[float, str]] = []
         self.server = Server(busy_for)
-        self.clients = [Client(i, self.server, backoffs_factory()) for i in range(num_clients)]
+        self.network = Network(10, 2)
+        self.clients = [Client(i, self.network, self.server, backoffs_factory()) for i in range(num_clients)]
         self.num_clients = num_clients
         self.label = label
 
@@ -137,10 +156,10 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
 
 def main():
     simulations = [
-        Simulation(1, lambda: repeat(3), 2, "always 3"),
-        Simulation(1, lambda: full_jitter(expo(2, 10)), 20, "full jittered expo"),
-        Simulation(1, lambda: half_jitter(expo(2, 10)), 20, "half jittered expo"),
-        Simulation(1, lambda: normal_jitter(expo(2, 10), 0, 1), 20, "normal jittered expo"),
+        Simulation(10, lambda: repeat(3), 2, "always 3"),
+        Simulation(10, lambda: full_jitter(expo(5, 200)), 20, "full jittered expo"),
+        Simulation(10, lambda: half_jitter(expo(5, 200)), 20, "half jittered expo"),
+        Simulation(10, lambda: normal_jitter(expo(5, 200), 0, 1), 20, "normal jittered expo"),
     ]
     for sim in simulations:
         sim.run()
