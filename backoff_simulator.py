@@ -37,7 +37,7 @@ from typing import Callable, Iterator
 @dataclass(order=True)
 class ScheduledTask:
     time: float
-    task: Callable = field(compare=False)
+    callback: Callable = field(compare=False)
 
 
 class Network:
@@ -49,13 +49,13 @@ class Network:
         return max(0, random.gauss(self.mu, self.sigma))
 
 
-class Server:
+class PCCServer:
     """
-    Simulates a server receiving contending write requests over the network.
+    Simulates a server receiving write requests, using pessimistic concurrency control.
 
     When it receives a request:
-        - if available, it accepts it and becomes unavailable for a while
-        - if unavailable, it rejects it
+        if available, it accepts it and becomes unavailable for a while
+        if unavailable, it rejects it immediately
     """
 
     def __init__(self, busy_for: int):
@@ -83,7 +83,7 @@ class Client:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id!r})"
 
-    def __init__(self, id: int, network: Network, server: Server, backoffs: Iterator[float]):
+    def __init__(self, id: int, network: Network, server: PCCServer, backoffs: Iterator[float]):
         self.id = id
         self.network = network
         self.server = server
@@ -95,8 +95,10 @@ class Client:
         return (self.network.delay(), self.receive, f"client {self.id} sent")
 
     def receive(self):
+        """Models the server receiving the request."""
         accepted = self.server.receive()
         if accepted:
+            # we don't care about the server -> client network delay in this case
             return (self.server.busy_for, self.server.free, f"client {self.id} accepted")
         else:
             return (
@@ -112,7 +114,7 @@ class Simulation:
         self.time = 0.0  # virtual clock
         self.todo: list[ScheduledTask] = []  # heap
         self.history: list[tuple[float, str]] = []
-        self.server = Server(busy_for)
+        self.server = PCCServer(busy_for)
         self.network = Network(10, 2)
         self.clients = [Client(i, self.network, self.server, backoffs_factory()) for i in range(num_clients)]
         self.num_clients = num_clients
@@ -125,11 +127,11 @@ class Simulation:
         while self.todo:
             task = heapq.heappop(self.todo)
             self.time = task.time
-            todo = task.task()
+            todo = task.callback()
             if todo:
-                delay, task, description = todo
+                delay, callback, description = todo
                 self.history.append((self.time, description))
-                heapq.heappush(self.todo, ScheduledTask(self.time + delay, task))
+                heapq.heappush(self.todo, ScheduledTask(self.time + delay, callback))
 
     def total_requests(self) -> int:
         return sum(client.request_count for client in self.clients)
