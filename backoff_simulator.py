@@ -31,7 +31,7 @@ import random
 
 import asyncio
 import time
-from itertools import count, repeat, tee
+from itertools import count, repeat
 from typing import Iterator
 
 
@@ -90,8 +90,8 @@ class Client:
 class Simulation:
     def __init__(self, busy_for: int, backoffs: Iterator[float], num_clients: int, label: str):
         self.server = Server(busy_for)
-        self.backoffs = tee(backoffs, num_clients)
-        self.clients = [Client(self.server, self.backoffs[i]) for i in range(num_clients)]
+        self.backoffs = backoffs
+        self.clients = [Client(self.server, backoffs) for _ in range(num_clients)]
         self.num_clients = num_clients
         self.label = label
         self.start_time: float
@@ -127,8 +127,8 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
 
 async def main():
     simulations = [
-        Simulation(5, repeat(3), 3, "always 3"),
-        # Simulation(1, full_jitter(expo(2, 10)), 20, "full jittered expo"),
+        Simulation(1, repeat(3), 2, "always 3"),
+        Simulation(1, full_jitter(expo(2, 10)), 20, "full jittered expo"),
         # Simulation(1, half_jitter(expo(2, 10)), 50, "half jittered expo"),
         # Simulation(1, normal_jitter(expo(2, 10), 0, 1), 50, "normal jittered expo"),
     ]
@@ -137,7 +137,6 @@ async def main():
 
     for sim in simulations:
         print(f"{sim.label}: {sim.total_requests()} requests in {sim.duration():.2f}s")
-        print(*sim.server.events)
 
 
 if __name__ == "__main__":
