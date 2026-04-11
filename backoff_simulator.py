@@ -80,19 +80,20 @@ class Client:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def send(self) -> tuple[float, Callable]:
+    def send(self) -> tuple[float, Callable, str]:
         self.request_count += 1
         accepted = self.server.receive()
         if accepted:
-            return (self.server.busy_for, self.server.free)
+            return (self.server.busy_for, self.server.free, f"client {self.id} accepted")
         else:
-            return (next(self.backoffs), self.send)
+            return (next(self.backoffs), self.send, f"client {self.id} rejected")
 
 
 class Simulation:
     def __init__(self, busy_for: int, backoffs_factory: Callable[[], Iterator[float]], num_clients: int, label: str):
         self.time = 0.0  # virtual clock
         self.todo: list[ScheduledTask] = []  # heap
+        self.history: list[tuple[float, str]] = []
         self.server = Server(busy_for)
         self.clients = [Client(i, self.server, backoffs_factory()) for i in range(num_clients)]
         self.num_clients = num_clients
@@ -107,7 +108,8 @@ class Simulation:
             self.time = task.time
             todo = task.task()
             if todo:
-                delay, task = todo
+                delay, task, description = todo
+                self.history.append((self.time, description))
                 heapq.heappush(self.todo, ScheduledTask(self.time + delay, task))
 
     def total_requests(self) -> int:
@@ -136,13 +138,18 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
 def main():
     simulations = [
         Simulation(1, lambda: repeat(3), 2, "always 3"),
-        # Simulation(1, lambda: full_jitter(expo(2, 10)), 20, "full jittered expo"),
+        Simulation(1, lambda: full_jitter(expo(2, 10)), 20, "full jittered expo"),
+        Simulation(1, lambda: half_jitter(expo(2, 10)), 20, "half jittered expo"),
+        Simulation(1, lambda: normal_jitter(expo(2, 10), 0, 1), 20, "normal jittered expo"),
     ]
     for sim in simulations:
         sim.run()
 
     for sim in simulations:
-        print(f"{sim.label}: {sim.total_requests()} requests, {sim.duration():.2f}s duration")
+        print(f"== {sim.label} ==")
+        print(f"{sim.total_requests()} requests, {sim.duration():.2f}s duration")
+        for time, description in sim.history:
+            print(f"{time:.2f}: {description}")
 
 
 if __name__ == "__main__":
