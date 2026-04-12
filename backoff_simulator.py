@@ -8,7 +8,8 @@ Simulates various backoff strategies for contending writes over the network.
 
 The setup:
 - many clients, starting at the same time, request over the network to write a particular database row
-- if writes contend, only one commits: the rest are discarded and the clients have to retry
+- if writes contend, only one commits
+- various concurrency controls are modeled
 
 You want to keep low
 - the time until all writes commit
@@ -87,6 +88,110 @@ class Network:
         return max(0, random.gauss(self.mu, self.sigma))
 
 
+class ReadWriteOCCServer:
+    """
+    Simulates a server receiving contending write requests, using read-then-write optimistic concurrency control.
+
+    The server stores a version number.
+    A client first reads the version, then requests a write, passing the version.
+    The server tentatively writes.
+    Then it checks the version again:
+        if different, it aborts
+        if the same, it commits and increments the version
+
+    The writes are variable-duration (not essential, but more realistic).
+    """
+
+    def __init__(self, network: Network, write_mu: float, write_sigma: float):
+        self.version = 0
+        self.network = network
+        self.write_mu = write_mu
+        self.write_sigma = write_sigma
+
+    def write_duration(self) -> float:
+        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TOOD: maybe abs instead of max, else 0 gets too much mass?
+
+    def handle_read(self, client_id: int, read_response_handler: Callable) -> Message:
+        return Message(
+            delay=self.network.delay(),
+            target=read_response_handler,
+            payload=self.version,
+            description=f"server reports version {self.version} to client {client_id}",
+        )
+
+    def handle_write(self, payload: MaybeCommitPayload, abort_handler: Callable) -> Message:
+        return Message(
+            delay=self.write_duration(),  # server-internal, so no network delay
+            target=self.maybe_commit,
+            payload=payload,
+            reply_target=abort_handler,
+            description=f"server tentatively writes client {payload.client_id}",
+        )
+
+    def maybe_commit(self, payload: MaybeCommitPayload, abort_handler: Callable) -> Message:
+        assert self.version >= payload.version, f"version has decreased: {self.version=} < {payload.version=}"
+
+        if self.version > payload.version:
+            # another write committed in the meantime
+            return Message(
+                delay=self.network.delay(),
+                target=abort_handler,
+                description=f"server aborts client {payload.client_id}",
+            )
+        else:
+            # The write commits.
+            # No need to tell the client the good news.
+            # In effect, clients assume they committed when they don't hear back.
+            self.version += 1
+            return Message(description=f"server commits client {payload.client_id} (version={self.version})")
+
+
+class ReadWriteClient:
+    """
+    Simulates a client sending read-then-write requests to a server over the network.
+
+    It reads the version number, then tries to write, passing the version.
+    If the write succeeds, it stops.
+    Else, it backs off and retries.
+    """
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id!r})"
+
+    def __init__(self, id: int, network: Network, server: ReadWriteOCCServer, backoffs: Iterator[float]):
+        self.id = id
+        self.network = network
+        self.server = server
+        self.backoffs = backoffs
+        self.request_count = 0
+
+    def initiate(self, payload: None, reply_target: None) -> Message:
+        self.request_count += 1  # a read-then-write cycle counts as 1 request for us
+        return Message(
+            delay=self.network.delay(),
+            target=self.server.handle_read,
+            payload=self.id,
+            reply_target=self.handle_read_response,
+            description=f"client {self.id} reads",
+        )
+
+    def handle_read_response(self, version: int, reply_target: None) -> Message:
+        return Message(
+            delay=self.network.delay(),
+            target=self.server.handle_write,
+            payload=MaybeCommitPayload(version, self.id),
+            reply_target=self.handle_abort,
+            description=f"client {self.id} requests write",
+        )
+
+    def handle_abort(self, payload: None, reply_target: None) -> Message:
+        return Message(
+            delay=next(self.backoffs),  # client-internal, so no network delay
+            target=self.initiate,
+            description=f"client {self.id} backs off",
+        )
+
+
 class WriteOnlyOCCServer:
     """
     Simulates a server receiving contending write requests, using write-only optimistic concurrency control.
@@ -111,8 +216,7 @@ class WriteOnlyOCCServer:
     def write_duration(self) -> float:
         return max(0, random.gauss(self.write_mu, self.write_sigma))  # TOOD: maybe abs instead of max, else 0 gets too much mass?
 
-    def receive(self, client_id: int, rejection_handler: Callable) -> Message:
-        version = self.version
+    def handle_write(self, client_id: int, rejection_handler: Callable) -> Message:
         return Message(
             delay=self.write_duration(),  # server-internal, so no network delay
             target=self.maybe_commit,
@@ -153,7 +257,7 @@ class LockingServer:
         self.network = network
         self.write_duration = write_duration
 
-    def receive(self, client_id: int, rejection_handler: Callable) -> Message:
+    def handle_write(self, client_id: int, rejection_handler: Callable) -> Message:
         if self.available:
             self.available = False
             # No need to tell the client the good news.
@@ -197,11 +301,11 @@ class WriteOnlyClient:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def send(self, payload: None, reply_target: None) -> Message:
+    def initiate(self, payload: None, reply_target: None) -> Message:
         self.request_count += 1
         return Message(
             delay=self.network.delay(),
-            target=self.server.receive,
+            target=self.server.handle_write,
             payload=self.id,
             reply_target=self.handle_rejection,
             description=f"client {self.id} sends",
@@ -210,13 +314,13 @@ class WriteOnlyClient:
     def handle_rejection(self, payload: None, reply_target: None) -> Message:
         return Message(
             delay=next(self.backoffs),  # client-internal, so no network delay
-            target=self.send,
+            target=self.initiate,
             description=f"client {self.id} backs off",
         )
 
 
 class Simulation:
-    def __init__(self, server: WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient], label: str):
+    def __init__(self, server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient] | list[ReadWriteClient], label: str):
         self.server = server
         self.clients = clients
         self.label = label
@@ -226,7 +330,7 @@ class Simulation:
 
     def run(self):
         for client in self.clients:
-            heapq.heappush(self.todos, Todo(0.0, target=client.send))
+            heapq.heappush(self.todos, Todo(0.0, target=client.initiate))
 
         # the simulation loop
         while self.todos:
@@ -281,14 +385,19 @@ def main() -> None:
     num_clients = 2
 
     locking_server = LockingServer(network, write_duration=5)
-    locking_clients=[WriteOnlyClient(i, network, locking_server, repeat(3)) for i in range(num_clients)]
+    locking_clients = [WriteOnlyClient(i, network, locking_server, repeat(3)) for i in range(num_clients)]
     locking_label = "locking, always 3"
     simulations.append(Simulation(locking_server, locking_clients, locking_label))
 
     write_only_occ_server = WriteOnlyOCCServer(network, write_mu=5, write_sigma=1)
-    write_only_occ_clients=[WriteOnlyClient(i, network, write_only_occ_server, repeat(3)) for i in range(num_clients)]
+    write_only_occ_clients = [WriteOnlyClient(i, network, write_only_occ_server, repeat(3)) for i in range(num_clients)]
     write_only_occ_label = "write only occ, always 3"
     simulations.append(Simulation(write_only_occ_server, write_only_occ_clients, write_only_occ_label))
+
+    read_write_occ_server = ReadWriteOCCServer(network, write_mu=5, write_sigma=1)
+    read_write_occ_clients = [ReadWriteClient(i, network, read_write_occ_server, repeat(3)) for i in range(num_clients)]
+    read_write_occ_label = "read-write occ, always 3"
+    simulations.append(Simulation(read_write_occ_server, read_write_occ_clients, read_write_occ_label))
 
     for sim in simulations:
         sim.run()
