@@ -31,13 +31,30 @@ import heapq
 import random
 from dataclasses import dataclass, field
 from itertools import count, repeat
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Any
 
 
-@dataclass(order=True)
-class ScheduledTask:
+@dataclass(frozen=True)
+class Todo:
+    """
+    Interpret as: after delay, call target with payload
+    and tell it to reply by calling reply_target,
+    plus a description for posterity.
+    """
+
+    delay: float
+    target: Callable
+    payload: Any
+    reply_target: Callable
+    description: str
+
+
+@dataclass(order=True, frozen=True)
+class ScheduledTodo:
+    """When to do what, processed by the simulation loop."""
+
     time: float
-    callback: Callable = field(compare=False)
+    todo: Todo = field(compare=False)
 
 
 class Network:
@@ -58,17 +75,37 @@ class PCCServer:
         if unavailable, it rejects it immediately
     """
 
-    def __init__(self, busy_for: int):
+    def __init__(self, network: Network, busy_for: int):
         self.available = True
+        self.network = Network
         self.busy_for = busy_for
 
-    def receive(self) -> bool:
-        accepted = self.available
-        self.available = False
+    def receive(self, client_id: int, rejection_handler: Callable) -> Todo:
+        if self.available:
+            self.available = False
+            # No need to tell the client the good news.
+            # In effect, clients assume they were accepted when they don't hear back.
+            # Also, no network delay for this todo: it's server-internal.
+            todo = Todo(
+                delay=self.server.busy_for,
+                target=self.server.free,
+                payload=None,
+                reply_to=None,
+                description="server free",
+            )
+        else:
+            todo = Todo(
+                delay=self.network.delay(),
+                target=rejection_handler,
+                payload=None,
+                reply_to=None,
+                description=f"client {client_id} backs off",
+            )
 
-        return accepted
+        return todo
 
-    def free(self) -> None:
+    def free(self, payload: None, reply_target: None) -> None:
+        # This is internal server business, not over the network.
         self.available = True
 
 
@@ -90,48 +127,65 @@ class Client:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def send(self) -> tuple[float, Callable, str]:
+    def send(self, payload: None, reply_target: None) -> Todo:
         self.request_count += 1
-        return (self.network.delay(), self.receive, f"client {self.id} sent")
+        return Todo(
+            delay=self.network.delay(),
+            target=self.server.receive,
+            payload=self.id,
+            reply_target=self.handle_rejection,
+            description=f"client {self.id} received",
+        )
 
-    def receive(self):
-        """Models the server receiving the request."""
-        accepted = self.server.receive()
-        if accepted:
-            # we don't care about the server -> client network delay in this case
-            return (self.server.busy_for, self.server.free, f"client {self.id} accepted")
-        else:
-            return (
-                self.network.delay()  # server -> client
-                + next(self.backoffs),
-                self.send,
-                f"client {self.id} rejected",
-            )
+    def handle_rejection(self, payload: None, reply_target: None) -> Todo:
+        return Todo(
+            delay=next(self.backoffs),  # client-internal, so no network delay
+            target=self.send,
+            payload=None,
+            reply_target=None,
+            description=f"client {self.id} sent",
+        )
 
 
 class Simulation:
     def __init__(self, busy_for: int, backoffs_factory: Callable[[], Iterator[float]], num_clients: int, label: str):
         self.time = 0.0  # virtual clock
-        self.todo: list[ScheduledTask] = []  # heap
+        self.scheduled_todos: list[ScheduledTodo] = []  # heap
         self.history: list[tuple[float, str]] = []
-        self.server = PCCServer(busy_for)
         self.network = Network(10, 2)
+        self.server = PCCServer(self.network, busy_for)
         self.clients = [Client(i, self.network, self.server, backoffs_factory()) for i in range(num_clients)]
         self.num_clients = num_clients
         self.label = label
 
     def run(self):
         for client in self.clients:
-            heapq.heappush(self.todo, ScheduledTask(0.0, client.send))
+            heapq.heappush(
+                self.scheduled_todos,
+                ScheduledTodo(
+                    0.0,
+                    Todo(
+                        delay=None,  # TODO: make defaults?
+                        target=client.send,
+                        payload=None,
+                        reply_target=None,
+                        description=f"client {client.id} sent",
+                    ),
+                ),
+            )
 
-        while self.todo:
-            task = heapq.heappop(self.todo)
-            self.time = task.time
-            todo = task.callback()
-            if todo:
-                delay, callback, description = todo
-                self.history.append((self.time, description))
-                heapq.heappush(self.todo, ScheduledTask(self.time + delay, callback))
+        # the simulation loop
+        while self.scheduled_todos:
+            todo_now = heapq.heappop(self.scheduled_todos)
+
+            assert todo_now.time > self.time, f"{todo_now.time=}, {self.time=}"
+            self.time = todo_now.time
+
+            self.history.append((self.time, todo_now.description))
+
+            todo_later = todo_now.target(todo_now.payload, todo_now.reply_target)
+            if todo_later:
+                heapq.heappush(self.scheduled_todos, ScheduledTodo(self.time + todo_later.delay, todo_later))
 
     def total_requests(self) -> int:
         return sum(client.request_count for client in self.clients)
