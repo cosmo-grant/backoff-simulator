@@ -31,30 +31,31 @@ import heapq
 import random
 from dataclasses import dataclass, field
 from itertools import count, repeat
-from typing import Callable, Iterator, Any
+from typing import Callable, Iterator
 
 
 @dataclass(frozen=True)
-class Todo:
+class Message:
     """
-    Interpret as: after delay, call target with payload
-    and tell it to reply by calling reply_target,
-    plus a description for posterity.
+    After delay, call target with payload, and tell it to reply by calling reply_target,
+    plus a message for the posterity.
     """
 
     delay: float
     target: Callable
-    payload: Any
-    reply_target: Callable
+    payload: int | None
+    reply_target: Callable | None
     description: str
 
 
 @dataclass(order=True, frozen=True)
-class ScheduledTodo:
-    """When to do what, processed by the simulation loop."""
+class Todo:
+    """At time, call target with payload and tell it to reply by calling reply_target."""
 
     time: float
-    todo: Todo = field(compare=False)
+    target: Callable = field(compare=False)
+    payload: int | None = field(compare=False)
+    reply_target: Callable | None = field(compare=False)
 
 
 class Network:
@@ -77,32 +78,32 @@ class PCCServer:
 
     def __init__(self, network: Network, busy_for: int):
         self.available = True
-        self.network = Network
+        self.network = network
         self.busy_for = busy_for
 
-    def receive(self, client_id: int, rejection_handler: Callable) -> Todo:
+    def receive(self, client_id: int, rejection_handler: Callable) -> Message:
         if self.available:
             self.available = False
             # No need to tell the client the good news.
             # In effect, clients assume they were accepted when they don't hear back.
             # Also, no network delay for this todo: it's server-internal.
-            todo = Todo(
-                delay=self.server.busy_for,
-                target=self.server.free,
+            message = Message(
+                delay=self.busy_for,
+                target=self.free,
                 payload=None,
-                reply_to=None,
-                description="server free",
+                reply_target=None,
+                description=f"server accepts client {client_id}",
             )
         else:
-            todo = Todo(
+            message = Message(
                 delay=self.network.delay(),
                 target=rejection_handler,
                 payload=None,
-                reply_to=None,
-                description=f"client {client_id} backs off",
+                reply_target=None,
+                description=f"server rejects client {client_id}",
             )
 
-        return todo
+        return message
 
     def free(self, payload: None, reply_target: None) -> None:
         # This is internal server business, not over the network.
@@ -127,30 +128,30 @@ class Client:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def send(self, payload: None, reply_target: None) -> Todo:
+    def send(self, payload: None, reply_target: None) -> Message:
         self.request_count += 1
-        return Todo(
+        return Message(
             delay=self.network.delay(),
             target=self.server.receive,
             payload=self.id,
             reply_target=self.handle_rejection,
-            description=f"client {self.id} received",
+            description=f"client {self.id} sends",
         )
 
-    def handle_rejection(self, payload: None, reply_target: None) -> Todo:
-        return Todo(
+    def handle_rejection(self, payload: None, reply_target: None) -> Message:
+        return Message(
             delay=next(self.backoffs),  # client-internal, so no network delay
             target=self.send,
             payload=None,
             reply_target=None,
-            description=f"client {self.id} sent",
+            description=f"client {self.id} backs off",
         )
 
 
 class Simulation:
     def __init__(self, busy_for: int, backoffs_factory: Callable[[], Iterator[float]], num_clients: int, label: str):
         self.time = 0.0  # virtual clock
-        self.scheduled_todos: list[ScheduledTodo] = []  # heap
+        self.todos: list[Todo] = []  # heap
         self.history: list[tuple[float, str]] = []
         self.network = Network(10, 2)
         self.server = PCCServer(self.network, busy_for)
@@ -161,31 +162,34 @@ class Simulation:
     def run(self):
         for client in self.clients:
             heapq.heappush(
-                self.scheduled_todos,
-                ScheduledTodo(
+                self.todos,
+                Todo(
                     0.0,
-                    Todo(
-                        delay=None,  # TODO: make defaults?
-                        target=client.send,
-                        payload=None,
-                        reply_target=None,
-                        description=f"client {client.id} sent",
-                    ),
+                    target=client.send,
+                    payload=None,
+                    reply_target=None,
                 ),
             )
 
         # the simulation loop
-        while self.scheduled_todos:
-            todo_now = heapq.heappop(self.scheduled_todos)
+        while self.todos:
+            todo_now = heapq.heappop(self.todos)
 
-            assert todo_now.time > self.time, f"{todo_now.time=}, {self.time=}"
+            assert todo_now.time >= self.time, f"{todo_now.time=}, {self.time=}"
             self.time = todo_now.time
 
-            self.history.append((self.time, todo_now.description))
-
-            todo_later = todo_now.target(todo_now.payload, todo_now.reply_target)
-            if todo_later:
-                heapq.heappush(self.scheduled_todos, ScheduledTodo(self.time + todo_later.delay, todo_later))
+            message = todo_now.target(todo_now.payload, todo_now.reply_target)
+            if message:
+                self.history.append((self.time, message.description))
+                heapq.heappush(
+                    self.todos,
+                    Todo(
+                        self.time + message.delay,
+                        message.target,
+                        message.payload,
+                        message.reply_target,
+                    ),
+                )
 
     def total_requests(self) -> int:
         return sum(client.request_count for client in self.clients)
@@ -213,16 +217,16 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
 def main():
     simulations = [
         Simulation(10, lambda: repeat(3), 2, "always 3"),
-        Simulation(10, lambda: full_jitter(expo(5, 200)), 20, "full jittered expo"),
-        Simulation(10, lambda: half_jitter(expo(5, 200)), 20, "half jittered expo"),
-        Simulation(10, lambda: normal_jitter(expo(5, 200), 0, 1), 20, "normal jittered expo"),
+        # Simulation(10, lambda: full_jitter(expo(5, 200)), 20, "full jittered expo"),
+        # Simulation(10, lambda: half_jitter(expo(5, 200)), 20, "half jittered expo"),
+        # Simulation(10, lambda: normal_jitter(expo(5, 200), 0, 1), 20, "normal jittered expo"),
     ]
     for sim in simulations:
         sim.run()
 
     for sim in simulations:
         print(f"== {sim.label} ==")
-        print(f"{sim.total_requests()} requests, {sim.duration():.2f}s duration")
+        print(f"requests: {sim.total_requests()}, duration {sim.duration():.2f}")
         for time, description in sim.history:
             print(f"{time:.2f}: {description}")
 
