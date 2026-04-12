@@ -34,6 +34,12 @@ from itertools import count, repeat
 from typing import Callable, Iterator
 
 
+@dataclass
+class MaybeCommitPayload:
+    version: int
+    client_id: int
+
+
 @dataclass(frozen=True)
 class Message:
     """
@@ -50,7 +56,7 @@ class Message:
     description: str
     delay: float | None = None
     target: Callable | None = None
-    payload: int | None = None
+    payload: int | MaybeCommitPayload | None = None
     reply_target: Callable | None = None
 
     def __post_init__(self):
@@ -81,7 +87,59 @@ class Network:
         return max(0, random.gauss(self.mu, self.sigma))
 
 
-class PCCServer:
+class WriteOnlyOCCServer:
+    """
+    Simulates a server receiving contending write requests, using write-only optimistic concurrency control.
+
+    The server stores a version number.
+    When it receives a request, it notes the version number and tentatively writes.
+    Then it checks the version again:
+        if different, it aborts
+        if the same, it commits and increments the version
+
+    The writes are variable-duration.
+    (If they were fixed-duration, then a write would succeed just if no write was in progress when it arrived.
+    So we'd end up with a locking server except it knowably does doomed-to-abort work.)
+    """
+
+    def __init__(self, network: Network, write_mu: float, write_sigma: float):
+        self.version = 0
+        self.network = network
+        self.write_mu = write_mu
+        self.write_sigma = write_sigma
+
+    def write_duration(self) -> float:
+        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TOOD: maybe abs instead of max, else 0 gets too much mass?
+
+    def receive(self, client_id: int, rejection_handler: Callable) -> Message:
+        version = self.version
+        return Message(
+            delay=self.write_duration(),  # server-internal, so no network delay
+            target=self.maybe_commit,
+            payload=MaybeCommitPayload(version=self.version, client_id=client_id),
+            reply_target=rejection_handler,
+            description=f"server tentatively writes client {client_id}",
+        )
+
+    def maybe_commit(self, payload: MaybeCommitPayload, rejection_handler: Callable) -> Message:
+        assert self.version >= payload.version, f"version has decreased: {self.version=} < {payload.version=}"
+
+        if self.version > payload.version:
+            # another write committed in the meantime
+            return Message(
+                delay=self.network.delay(),
+                target=rejection_handler,
+                description=f"server aborts client {payload.client_id}",
+            )
+        else:
+            # The write commits.
+            # No need to tell the client the good news.
+            # In effect, clients assume they committed when they don't hear back.
+            self.version += 1
+            return Message(description=f"server commits client {payload.client_id} (version={self.version}")
+
+
+class LockingServer:
     """
     Simulates a server receiving contending write requests, using pessimistic concurrency control.
 
@@ -90,19 +148,19 @@ class PCCServer:
         if unavailable, it rejects it immediately
     """
 
-    def __init__(self, network: Network, busy_for: int):
+    def __init__(self, network: Network, write_duration: float):
         self.available = True
         self.network = network
-        self.busy_for = busy_for
+        self.write_duration = write_duration
 
     def receive(self, client_id: int, rejection_handler: Callable) -> Message:
         if self.available:
             self.available = False
             # No need to tell the client the good news.
             # In effect, clients assume they were accepted when they don't hear back.
-            # Also, no network delay for this todo: it's server-internal.
+            # Also, server-internal, so no network delay.
             message = Message(
-                delay=self.busy_for,
+                delay=self.write_duration,
                 target=self.free,
                 description=f"server accepts client {client_id}",
             )
@@ -121,7 +179,7 @@ class PCCServer:
         return Message(description="server free")
 
 
-class Client:
+class WriteOnlyClient:
     """
     Simulates a client sending write requests to a server over the network.
 
@@ -132,7 +190,7 @@ class Client:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.id!r})"
 
-    def __init__(self, id: int, network: Network, server: PCCServer, backoffs: Iterator[float]):
+    def __init__(self, id: int, network: Network, server: LockingServer | WriteOnlyOCCServer, backoffs: Iterator[float]):
         self.id = id
         self.network = network
         self.server = server
@@ -158,15 +216,13 @@ class Client:
 
 
 class Simulation:
-    def __init__(self, busy_for: int, backoffs_factory: Callable[[], Iterator[float]], num_clients: int, label: str):
+    def __init__(self, server: WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient], label: str):
+        self.server = server
+        self.clients = clients
+        self.label = label
         self.time = 0.0  # virtual clock
         self.todos: list[Todo] = []  # heap
         self.history: list[tuple[float, str]] = []
-        self.network = Network(10, 2)
-        self.server = PCCServer(self.network, busy_for)
-        self.clients = [Client(i, self.network, self.server, backoffs_factory()) for i in range(num_clients)]
-        self.num_clients = num_clients
-        self.label = label
 
     def run(self):
         for client in self.clients:
@@ -219,19 +275,27 @@ def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[flo
     return (max(0, t + random.gauss(mu, sigma)) for t in raw)
 
 
-def main():
-    simulations = [
-        Simulation(10, lambda: repeat(3), 2, "always 3"),
-        # Simulation(10, lambda: full_jitter(expo(5, 200)), 20, "full jittered expo"),
-        # Simulation(10, lambda: half_jitter(expo(5, 200)), 20, "half jittered expo"),
-        # Simulation(10, lambda: normal_jitter(expo(5, 200), 0, 1), 20, "normal jittered expo"),
-    ]
+def main() -> None:
+    simulations: list[Simulation] = []
+    network = Network(10, 2)
+    num_clients = 2
+
+    locking_server = LockingServer(network, write_duration=5)
+    locking_clients=[WriteOnlyClient(i, network, locking_server, repeat(3)) for i in range(num_clients)]
+    locking_label = "locking, always 3"
+    simulations.append(Simulation(locking_server, locking_clients, locking_label))
+
+    write_only_occ_server = WriteOnlyOCCServer(network, write_mu=5, write_sigma=1)
+    write_only_occ_clients=[WriteOnlyClient(i, network, write_only_occ_server, repeat(3)) for i in range(num_clients)]
+    write_only_occ_label = "write only occ, always 3"
+    simulations.append(Simulation(write_only_occ_server, write_only_occ_clients, write_only_occ_label))
+
     for sim in simulations:
         sim.run()
 
     for sim in simulations:
         print(f"== {sim.label} ==")
-        print(f"requests: {sim.total_requests()}, duration {sim.duration():.2f}")
+        print(f"requests: {sim.total_requests()}, duration: {sim.duration():.2f}")
         for time, description in sim.history:
             print(f"{time:.2f}: {description}")
 
