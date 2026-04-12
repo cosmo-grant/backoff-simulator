@@ -16,8 +16,8 @@ You want to keep low
 
 You can keep the completion time low by making clients retry rapidly.
 But then writes often contend, so the request count is high.
-You can keep the request count low by making clients spread out their tries.
-But then the completion time is high.
+You can keep the request count low by making clients retry sporadically.
+But then the server is often idle, so the completion time is high.
 So there’s a tradeoff.
 
 There's a famous aws blog post and simulation script about this:
@@ -37,25 +37,39 @@ from typing import Callable, Iterator
 @dataclass(frozen=True)
 class Message:
     """
-    After delay, call target with payload, and tell it to reply by calling reply_target,
-    plus a message for the posterity.
+    Message from simulated resource to simulation loop.
+
+    If target is not None, read as:
+        please schedule this: after delay, call target with payload, and tell it to reply by calling reply_target
+    Else, read as:
+        nothing to schedule
+
+    Also includes a human-readable description.
     """
 
-    delay: float
-    target: Callable
-    payload: int | None
-    reply_target: Callable | None
     description: str
+    delay: float | None = None
+    target: Callable | None = None
+    payload: int | None = None
+    reply_target: Callable | None = None
+
+    def __post_init__(self):
+        if self.target is not None and self.delay is None:
+            raise ValueError(f"must have non-None delay for non-None target: {self.delay=}, {self.target=}")
 
 
 @dataclass(order=True, frozen=True)
 class Todo:
-    """At time, call target with payload and tell it to reply by calling reply_target."""
+    """
+    Scheduled unit of work for the simulation loop.
+
+    Read as: at time, call target with payload and tell it to reply by calling reply_target.
+    """
 
     time: float
     target: Callable = field(compare=False)
-    payload: int | None = field(compare=False)
-    reply_target: Callable | None = field(compare=False)
+    payload: int | None = field(compare=False, default=None)
+    reply_target: Callable | None = field(compare=False, default=None)
 
 
 class Network:
@@ -69,7 +83,7 @@ class Network:
 
 class PCCServer:
     """
-    Simulates a server receiving write requests, using pessimistic concurrency control.
+    Simulates a server receiving contending write requests, using pessimistic concurrency control.
 
     When it receives a request:
         if available, it accepts it and becomes unavailable for a while
@@ -90,24 +104,21 @@ class PCCServer:
             message = Message(
                 delay=self.busy_for,
                 target=self.free,
-                payload=None,
-                reply_target=None,
                 description=f"server accepts client {client_id}",
             )
         else:
             message = Message(
                 delay=self.network.delay(),
                 target=rejection_handler,
-                payload=None,
-                reply_target=None,
                 description=f"server rejects client {client_id}",
             )
 
         return message
 
-    def free(self, payload: None, reply_target: None) -> None:
+    def free(self, payload: None, reply_target: None) -> Message:
         # This is internal server business, not over the network.
         self.available = True
+        return Message(description="server free")
 
 
 class Client:
@@ -142,8 +153,6 @@ class Client:
         return Message(
             delay=next(self.backoffs),  # client-internal, so no network delay
             target=self.send,
-            payload=None,
-            reply_target=None,
             description=f"client {self.id} backs off",
         )
 
@@ -161,26 +170,22 @@ class Simulation:
 
     def run(self):
         for client in self.clients:
-            heapq.heappush(
-                self.todos,
-                Todo(
-                    0.0,
-                    target=client.send,
-                    payload=None,
-                    reply_target=None,
-                ),
-            )
+            heapq.heappush(self.todos, Todo(0.0, target=client.send))
 
         # the simulation loop
         while self.todos:
-            todo_now = heapq.heappop(self.todos)
+            # Get the next todo.
+            todo = heapq.heappop(self.todos)
 
-            assert todo_now.time >= self.time, f"{todo_now.time=}, {self.time=}"
-            self.time = todo_now.time
+            # Advance the virtual clock to the todo's scheduled time.
+            assert todo.time >= self.time, f"{todo.time=}, {self.time=}"
+            self.time = todo.time
 
-            message = todo_now.target(todo_now.payload, todo_now.reply_target)
-            if message:
-                self.history.append((self.time, message.description))
+            # Do the todo, returning a message.
+            message = todo.target(todo.payload, todo.reply_target)
+            self.history.append((self.time, message.description))
+            if message.target:
+                # The message describes a new todo.
                 heapq.heappush(
                     self.todos,
                     Todo(
