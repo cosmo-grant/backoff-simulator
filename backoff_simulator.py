@@ -327,10 +327,14 @@ class LockingServer:
         if unavailable, it rejects it immediately
     """
 
-    def __init__(self, network: Network, write_duration: float):
+    def __init__(self, network: Network, write_mu: float, write_sigma: float):
         self.available = True
         self.network = network
-        self.write_duration = write_duration
+        self.write_mu = write_mu
+        self.write_sigma = write_sigma
+
+    def write_duration(self) -> float:
+        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
 
     def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
         if self.available:
@@ -344,7 +348,7 @@ class LockingServer:
                     client_id,
                 ),
                 Message(
-                    delay=self.write_duration,
+                    delay=self.write_duration(),
                     target=self.free,
                 ),
             )
@@ -485,7 +489,7 @@ def main() -> None:
     network = Network(10, 2)
     num_clients = 2
 
-    locking_server = LockingServer(network, write_duration=5)
+    locking_server = LockingServer(network, write_mu=5, write_sigma=1)
     locking_clients = [WriteOnlyClient(i, network, locking_server, repeat(3)) for i in range(num_clients)]
     locking_label = "locking, always 3"
     simulations.append(Simulation(locking_server, locking_clients, locking_label))
