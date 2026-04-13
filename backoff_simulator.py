@@ -59,15 +59,17 @@ class Message:
 
 
 class EventType(StrEnum):
+    # These happen in all concurrency controls.
+    # So use them for a control-independent analysis.
     CLIENT_REQUESTS_WRITE = "client_requests_write"
     CLIENT_BACKS_OFF = "client_backs_off"
+    SERVER_COMMITS = "server_commits"
+    # These happen in some controls but not others.
     CLIENT_REQUESTS_VERSION = "client_requests_version"
     SERVER_ACCEPTS = "server_accepts"
     SERVER_REJECTS = "server_rejects"
-    SERVER_FREES = "server_frees"
     SERVER_REPORTS_VERSION = "server_reports_version"
     SERVER_TENTATIVELY_WRITES = "server_tentatively_writes"
-    SERVER_COMMITS = "server_commits"
     SERVER_ABORTS = "server_aborts"
 
 
@@ -206,10 +208,8 @@ class ReadWriteClient:
         self.network = network
         self.server = server
         self.backoffs = backoffs
-        self.request_count = 0
 
     def initiate(self, payload: None, reply_target: None) -> TargetResult:
-        self.request_count += 1  # a read-then-write cycle counts as 1 request for us
         return (
             Event(
                 EventType.CLIENT_REQUESTS_VERSION,
@@ -364,7 +364,7 @@ class LockingServer:
         # This is internal server business, not over the network.
         self.available = True
         return (
-            Event(EventType.SERVER_FREES),
+            Event(EventType.SERVER_COMMITS),
             None,
         )
 
@@ -385,10 +385,8 @@ class WriteOnlyClient:
         self.network = network
         self.server = server
         self.backoffs = backoffs
-        self.request_count = 0
 
     def initiate(self, payload: None, reply_target: None) -> TargetResult:
-        self.request_count += 1
         return (
             Event(
                 EventType.CLIENT_REQUESTS_WRITE,
@@ -413,6 +411,20 @@ class WriteOnlyClient:
                 target=self.initiate,
             ),
         )
+
+
+class Analyzer:
+    def __init__(self, history: list[tuple[float, Event]]):
+        self.history = history
+
+    def total_requests(self) -> int:
+        return sum(1 for _, event in self.history if event.event_type == EventType.CLIENT_REQUESTS_WRITE)
+
+    def duration(self) -> float:
+        # The time at which all client writes committed.
+        time, event = self.history[-1]
+        assert event.event_type == EventType.SERVER_COMMITS, f"{event.event_type=}"
+        return time
 
 
 class Simulation:
@@ -450,12 +462,6 @@ class Simulation:
                         message.reply_target,
                     ),
                 )
-
-    def total_requests(self) -> int:
-        return sum(client.request_count for client in self.clients)
-
-    def duration(self) -> float:
-        return self.time
 
 
 def expo(base: int, cap: float) -> Iterator[float]:
@@ -498,9 +504,10 @@ def main() -> None:
         sim.run()
 
     for sim in simulations:
+        analyzer = Analyzer(sim.history)
         print(f"== {sim.label} ==")
-        print(f"requests: {sim.total_requests()}, duration: {sim.duration():.2f}")
-        for time, event in sim.history:
+        print(f"requests: {analyzer.total_requests()}, duration: {analyzer.duration():.2f}")
+        for time, event in analyzer.history:
             print(f"{time:.2f}: {event}")
 
 
