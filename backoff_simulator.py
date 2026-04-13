@@ -320,12 +320,12 @@ class WriteOnlyClient:
                 delay=self.network.delay(),
                 target=self.server.handle_write,
                 payload=self.id,
-                reply_target=self.handle_rejection,
+                reply_target=self.handle_abort,
             ),
             f"client {self.id} sends",
         )
 
-    def handle_rejection(self, payload: None, reply_target: None) -> TargetResult:
+    def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
         return (
             Message(
                 delay=next(self.backoffs),  # client-internal, so no network delay
