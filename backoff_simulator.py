@@ -46,23 +46,17 @@ class Message:
     """
     Message from simulated resource to simulation loop.
 
-    If target is not None, read as:
-        please schedule this: after delay, call target with payload, and tell it to reply by calling reply_target
-    Else, read as:
-        nothing to schedule
-
-    Also includes a human-readable description.
+    Read as: "please schedule this: after delay, call target with payload,
+    and tell it to reply by calling reply_target."
     """
 
-    description: str
-    delay: float | None = None
-    target: Callable | None = None
+    delay: float
+    target: Callable
     payload: int | MaybeCommitPayload | None = None
     reply_target: Callable | None = None
 
-    def __post_init__(self):
-        if self.target is not None and self.delay is None:
-            raise ValueError(f"must have non-None delay for non-None target: {self.delay=}, {self.target=}")
+
+type TargetResult = tuple[Message | None, str]
 
 
 @dataclass(order=True, frozen=True)
@@ -70,7 +64,7 @@ class Todo:
     """
     Scheduled unit of work for the simulation loop.
 
-    Read as: at time, call target with payload and tell it to reply by calling reply_target.
+    Read as: "at time, call target with payload and tell it to reply by calling reply_target."
     """
 
     time: float
@@ -111,39 +105,45 @@ class ReadWriteOCCServer:
     def write_duration(self) -> float:
         return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
 
-    def handle_read(self, client_id: int, read_response_handler: Callable) -> Message:
-        return Message(
-            delay=self.network.delay(),
-            target=read_response_handler,
-            payload=self.version,
-            description=f"server reports version {self.version} to client {client_id}",
+    def handle_read(self, client_id: int, read_response_handler: Callable) -> TargetResult:
+        return (
+            Message(
+                delay=self.network.delay(),
+                target=read_response_handler,
+                payload=self.version,
+            ),
+            f"server reports version {self.version} to client {client_id}",
         )
 
-    def handle_write(self, payload: MaybeCommitPayload, abort_handler: Callable) -> Message:
-        return Message(
-            delay=self.write_duration(),  # server-internal, so no network delay
-            target=self.maybe_commit,
-            payload=payload,
-            reply_target=abort_handler,
-            description=f"server tentatively writes client {payload.client_id}",
+    def handle_write(self, payload: MaybeCommitPayload, abort_handler: Callable) -> TargetResult:
+        return (
+            Message(
+                delay=self.write_duration(),  # server-internal, so no network delay
+                target=self.maybe_commit,
+                payload=payload,
+                reply_target=abort_handler,
+            ),
+            f"server tentatively writes client {payload.client_id}",
         )
 
-    def maybe_commit(self, payload: MaybeCommitPayload, abort_handler: Callable) -> Message:
+    def maybe_commit(self, payload: MaybeCommitPayload, abort_handler: Callable) -> TargetResult:
         assert self.version >= payload.version, f"version has decreased: {self.version=} < {payload.version=}"
 
         if self.version > payload.version:
             # another write committed in the meantime
-            return Message(
-                delay=self.network.delay(),
-                target=abort_handler,
-                description=f"server aborts client {payload.client_id}",
+            return (
+                Message(
+                    delay=self.network.delay(),
+                    target=abort_handler,
+                ),
+                f"server aborts client {payload.client_id}",
             )
         else:
             # The write commits.
             # No need to tell the client the good news.
             # In effect, clients assume they committed when they don't hear back.
             self.version += 1
-            return Message(description=f"server commits client {payload.client_id} (version={self.version})")
+            return (None, f"server commits client {payload.client_id} (version={self.version})")
 
 
 class ReadWriteClient:
@@ -165,30 +165,36 @@ class ReadWriteClient:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def initiate(self, payload: None, reply_target: None) -> Message:
+    def initiate(self, payload: None, reply_target: None) -> TargetResult:
         self.request_count += 1  # a read-then-write cycle counts as 1 request for us
-        return Message(
-            delay=self.network.delay(),
-            target=self.server.handle_read,
-            payload=self.id,
-            reply_target=self.handle_read_response,
-            description=f"client {self.id} reads",
+        return (
+            Message(
+                delay=self.network.delay(),
+                target=self.server.handle_read,
+                payload=self.id,
+                reply_target=self.handle_read_response,
+            ),
+            f"client {self.id} reads",
         )
 
-    def handle_read_response(self, version: int, reply_target: None) -> Message:
-        return Message(
-            delay=self.network.delay(),
-            target=self.server.handle_write,
-            payload=MaybeCommitPayload(version, self.id),
-            reply_target=self.handle_abort,
-            description=f"client {self.id} requests write",
+    def handle_read_response(self, version: int, reply_target: None) -> TargetResult:
+        return (
+            Message(
+                delay=self.network.delay(),
+                target=self.server.handle_write,
+                payload=MaybeCommitPayload(version, self.id),
+                reply_target=self.handle_abort,
+            ),
+            f"client {self.id} requests write",
         )
 
-    def handle_abort(self, payload: None, reply_target: None) -> Message:
-        return Message(
-            delay=next(self.backoffs),  # client-internal, so no network delay
-            target=self.initiate,
-            description=f"client {self.id} backs off",
+    def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
+        return (
+            Message(
+                delay=next(self.backoffs),  # client-internal, so no network delay
+                target=self.initiate,
+            ),
+            f"client {self.id} backs off",
         )
 
 
@@ -216,31 +222,35 @@ class WriteOnlyOCCServer:
     def write_duration(self) -> float:
         return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
 
-    def handle_write(self, client_id: int, rejection_handler: Callable) -> Message:
-        return Message(
-            delay=self.write_duration(),  # server-internal, so no network delay
-            target=self.maybe_commit,
-            payload=MaybeCommitPayload(version=self.version, client_id=client_id),
-            reply_target=rejection_handler,
-            description=f"server tentatively writes client {client_id}",
+    def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
+        return (
+            Message(
+                delay=self.write_duration(),  # server-internal, so no network delay
+                target=self.maybe_commit,
+                payload=MaybeCommitPayload(version=self.version, client_id=client_id),
+                reply_target=rejection_handler,
+            ),
+            f"server tentatively writes client {client_id}",
         )
 
-    def maybe_commit(self, payload: MaybeCommitPayload, rejection_handler: Callable) -> Message:
+    def maybe_commit(self, payload: MaybeCommitPayload, rejection_handler: Callable) -> TargetResult:
         assert self.version >= payload.version, f"version has decreased: {self.version=} < {payload.version=}"
 
         if self.version > payload.version:
             # another write committed in the meantime
-            return Message(
-                delay=self.network.delay(),
-                target=rejection_handler,
-                description=f"server aborts client {payload.client_id}",
+            return (
+                Message(
+                    delay=self.network.delay(),
+                    target=rejection_handler,
+                ),
+                f"server aborts client {payload.client_id}",
             )
         else:
             # The write commits.
             # No need to tell the client the good news.
             # In effect, clients assume they committed when they don't hear back.
             self.version += 1
-            return Message(description=f"server commits client {payload.client_id} (version={self.version})")
+            return (None, f"server commits client {payload.client_id} (version={self.version})")
 
 
 class LockingServer:
@@ -257,30 +267,32 @@ class LockingServer:
         self.network = network
         self.write_duration = write_duration
 
-    def handle_write(self, client_id: int, rejection_handler: Callable) -> Message:
+    def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
         if self.available:
             self.available = False
             # No need to tell the client the good news.
             # In effect, clients assume they were accepted when they don't hear back.
             # Also, server-internal, so no network delay.
-            message = Message(
-                delay=self.write_duration,
-                target=self.free,
-                description=f"server accepts client {client_id}",
+            return (
+                Message(
+                    delay=self.write_duration,
+                    target=self.free,
+                ),
+                f"server accepts client {client_id}",
             )
         else:
-            message = Message(
-                delay=self.network.delay(),
-                target=rejection_handler,
-                description=f"server rejects client {client_id}",
+            return (
+                Message(
+                    delay=self.network.delay(),
+                    target=rejection_handler,
+                ),
+                f"server rejects client {client_id}",
             )
 
-        return message
-
-    def free(self, payload: None, reply_target: None) -> Message:
+    def free(self, payload: None, reply_target: None) -> TargetResult:
         # This is internal server business, not over the network.
         self.available = True
-        return Message(description="server free")
+        return (None, "server free")
 
 
 class WriteOnlyClient:
@@ -301,21 +313,25 @@ class WriteOnlyClient:
         self.backoffs = backoffs
         self.request_count = 0
 
-    def initiate(self, payload: None, reply_target: None) -> Message:
+    def initiate(self, payload: None, reply_target: None) -> TargetResult:
         self.request_count += 1
-        return Message(
-            delay=self.network.delay(),
-            target=self.server.handle_write,
-            payload=self.id,
-            reply_target=self.handle_rejection,
-            description=f"client {self.id} sends",
+        return (
+            Message(
+                delay=self.network.delay(),
+                target=self.server.handle_write,
+                payload=self.id,
+                reply_target=self.handle_rejection,
+            ),
+            f"client {self.id} sends",
         )
 
-    def handle_rejection(self, payload: None, reply_target: None) -> Message:
-        return Message(
-            delay=next(self.backoffs),  # client-internal, so no network delay
-            target=self.initiate,
-            description=f"client {self.id} backs off",
+    def handle_rejection(self, payload: None, reply_target: None) -> TargetResult:
+        return (
+            Message(
+                delay=next(self.backoffs),  # client-internal, so no network delay
+                target=self.initiate,
+            ),
+            f"client {self.id} backs off",
         )
 
 
@@ -341,11 +357,10 @@ class Simulation:
             assert todo.time >= self.time, f"{todo.time=}, {self.time=}"
             self.time = todo.time
 
-            # Do the todo, returning a message.
-            message = todo.target(todo.payload, todo.reply_target)
-            self.history.append((self.time, message.description))
-            if message.target:
-                # The message describes a new todo.
+            # Do the todo, maybe scheduling another todo as a result.
+            message, description = todo.target(todo.payload, todo.reply_target)
+            self.history.append((self.time, description))
+            if message:
                 heapq.heappush(
                     self.todos,
                     Todo(
