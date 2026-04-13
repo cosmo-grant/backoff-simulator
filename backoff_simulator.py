@@ -109,7 +109,7 @@ class ReadWriteOCCServer:
         self.write_sigma = write_sigma
 
     def write_duration(self) -> float:
-        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TOOD: maybe abs instead of max, else 0 gets too much mass?
+        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
 
     def handle_read(self, client_id: int, read_response_handler: Callable) -> Message:
         return Message(
@@ -214,7 +214,7 @@ class WriteOnlyOCCServer:
         self.write_sigma = write_sigma
 
     def write_duration(self) -> float:
-        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TOOD: maybe abs instead of max, else 0 gets too much mass?
+        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
 
     def handle_write(self, client_id: int, rejection_handler: Callable) -> Message:
         return Message(
@@ -240,7 +240,7 @@ class WriteOnlyOCCServer:
             # No need to tell the client the good news.
             # In effect, clients assume they committed when they don't hear back.
             self.version += 1
-            return Message(description=f"server commits client {payload.client_id} (version={self.version}")
+            return Message(description=f"server commits client {payload.client_id} (version={self.version})")
 
 
 class LockingServer:
