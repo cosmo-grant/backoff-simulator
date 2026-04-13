@@ -51,7 +51,7 @@ class Message:
     """
 
     delay: float
-    target: Callable
+    target: Callable[..., TargetResult]
     payload: int | MaybeCommitPayload | None = None
     reply_target: Callable | None = None
 
@@ -68,7 +68,7 @@ class Todo:
     """
 
     time: float
-    target: Callable = field(compare=False)
+    target: Callable[..., TargetResult] = field(compare=False)
     payload: int | None = field(compare=False, default=None)
     reply_target: Callable | None = field(compare=False, default=None)
 
