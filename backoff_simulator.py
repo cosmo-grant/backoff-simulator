@@ -517,15 +517,15 @@ type SimulationResults = dict[SimulationType, tuple[float, float, float]]
 
 
 def simulate(
-    max_clients: int = 50,
-    expo_base: int = 2,
-    expo_cap: int = 10,
-    network_mu: int = 10,
-    network_sigma: int = 2,
-    write_mu: int = 5,
-    write_sigma: int = 2,
-    repeat: int = 20,
-    requests_over_duration: float = 1,
+    max_clients: int,
+    expo_base: int,
+    expo_cap: int,
+    network_mu: int,
+    network_sigma: int,
+    write_mu: int,
+    write_sigma: int,
+    repeat: int,
+    requests_over_duration: float,
 ) -> SimulationGroups:
     """Run simulations and return them, grouped by type."""
     simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
@@ -681,16 +681,15 @@ def run(
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--max-clients", type=int)
-    parser.add_argument("--expo-base", type=int)
-    parser.add_argument("--expo-cap", type=int)
-    parser.add_argument("--network-mu", type=int)
-    parser.add_argument("--network-sigma", type=int)
-    parser.add_argument("--write-mu", type=int)
-    parser.add_argument("--write-sigma", type=int)
-    parser.add_argument("--repeat", type=int)
-    parser.add_argument("--work-over-duration", type=float)
+    parser.add_argument("--max-clients", type=int, default=50)
+    parser.add_argument("--expo-base", type=int, default=2)
+    parser.add_argument("--expo-cap", type=int, default=10)
+    parser.add_argument("--network-mu", type=int, default=5)
+    parser.add_argument("--network-sigma", type=int, default=1)
+    parser.add_argument("--write-mu", type=int, default=2)
+    parser.add_argument("--write-sigma", type=int, default=1)
+    parser.add_argument("--repeat", type=int, default=20)
+    parser.add_argument("--requests-over-duration", type=float, default=1)
     args = parser.parse_args()
 
-    # rely on simulate()'s defaults for not-provided args
-    run(**{k: v for k, v in vars(args).items() if v is not None})
+    run(**vars(args))

@@ -40,7 +40,8 @@ def _(mo):
 
 @app.cell
 def _(form, mo, simulate, make_figures, make_tables):
-    params = form.value if form.value else {"max_clients": 50, "requests_over_duration": 1}
+    mo.stop(form.value is None, mo.md("**Set parameters and click submit.**"))
+    params = form.value
     groups = simulate(**params)
     figs = make_figures(groups, params["max_clients"], params["requests_over_duration"])
     tables = make_tables(groups, params["max_clients"])
