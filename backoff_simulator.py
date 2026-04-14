@@ -8,7 +8,6 @@ from itertools import count, product
 from typing import Protocol
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 from tabulate import tabulate
 
 
@@ -619,7 +618,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
         ax.set_title(f"{strategy}\n{control}", fontsize=9)
         ax.set_xlabel("time")
         ax.set_ylabel("client id")
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.tick_params(axis="y", which="both", left=False, labelleft=False)
     fig4.suptitle("Write Requests Over Time")
     fig4.tight_layout()
 
