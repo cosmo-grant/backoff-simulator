@@ -585,7 +585,7 @@ def run(
 
     # Plot 3: cost vs number of clients for each strategy, one subplot per control
     fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes2, controls, strict=True):
+    for ax, control in zip(axes3, controls, strict=True):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
             ys = [results[(n, strategy, control)][2] for n in xs]  # cost
@@ -594,14 +594,14 @@ def run(
         ax.set_ylabel("cost (avg)")
         ax.legend()
         ax.set_title(control)
-    fig2.suptitle("Cost")
-    fig2.tight_layout()
-    fig2.savefig("cost.png")
+    fig3.suptitle("Cost")
+    fig3.tight_layout()
+    fig3.savefig("cost.png")
 
     # Plot 4: scatter plots of write-request times.
     # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
-    fig3, axes = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
-    for ax, (strategy, control) in zip(axes.flat, product(strategies, controls), strict=True):
+    fig4, axes4 = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
+    for ax, (strategy, control) in zip(axes4.flat, product(strategies, controls), strict=True):
         sim = groups[(max_clients, strategy, control)][0]  # pick first repetition as representative
         times = []
         client_ids = []
@@ -614,9 +614,9 @@ def run(
         ax.set_xlabel("time")
         ax.set_ylabel("client id")
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    fig3.suptitle("Write Requests Over Time")
-    fig3.tight_layout()
-    fig3.savefig("scatter.png")
+    fig4.suptitle("Write Requests Over Time")
+    fig4.tight_layout()
+    fig4.savefig("scatter.png")
 
     # Stdout: history of the simulation.
     # One history per (strategy, control) combination, using an arbitrary sim at a low num_clients.
