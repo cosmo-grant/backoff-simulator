@@ -621,6 +621,18 @@ def main() -> None:
     fig3.tight_layout()
     fig3.savefig("scatter.png")
 
+    # Stdout: history of the simulation.
+    # One history per (strategy, control) combination, using an arbitrary sim at a low num_clients.
+    for strategy, control in product(strategies, controls):
+        num_clients = min(max_clients, 3)
+        sim = groups[(num_clients, strategy, control)][0]  # pick first repetition as representative
+        print(f"== {control} {strategy} ==")
+        for t, event in sim.history:
+            id = f"client {event.client_id} " if event.client_id is not None else ""
+            detail = f" ({event.event_detail})" if event.event_detail else ""
+            print(f"{t:.02f}: {id}{event.event_type}{detail}")
+        print()
+
 
 if __name__ == "__main__":
     main()
