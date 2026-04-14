@@ -513,6 +513,7 @@ def run(
     write_mu: int = 5,
     write_sigma: int = 2,
     repeat: int = 20,
+    work_over_duration: float = 1,
 ) -> None:
     simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
 
@@ -531,11 +532,15 @@ def run(
         groups.setdefault(key, []).append(sim)
 
     # Average per group of total requests and duration.
-    results: dict[tuple[int, str, str], tuple[float, float]] = {}
+    results: dict[tuple[int, str, str], tuple[float, float, float]] = {}
     for key, sims in groups.items():
         avg_requests = sum(s.total_requests() for s in sims) / len(sims)
         avg_duration = sum(s.duration() for s in sims) / len(sims)
-        results[key] = (avg_requests, avg_duration)
+        # Cost is a measure of performance (lower is better), from combining total requests and duration.
+        # The work_over_duration is the exchange rate of requests to duration.
+        # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
+        avg_cost = sum(work_over_duration * s.total_requests() + s.duration() for s in sims) / len(sims)
+        results[key] = (avg_requests, avg_duration, avg_cost)
 
     # We run every strategy-control combination.
     controls = sorted({control for _, _, control in results})
@@ -546,7 +551,7 @@ def run(
     for ax, control in zip(axes1, controls):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
-            ys = [results[(n, strategy, control)][0] for n in xs]
+            ys = [results[(n, strategy, control)][0] for n in xs]  # requests
             ax.plot(xs, ys, label=strategy)
         ax.set_xlabel("number of clients")
         ax.set_ylabel("total requests (avg)")
@@ -561,7 +566,7 @@ def run(
     for ax, control in zip(axes2, controls):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
-            ys = [results[(n, strategy, control)][1] for n in xs]
+            ys = [results[(n, strategy, control)][1] for n in xs]  # duration
             ax.plot(xs, ys, label=strategy)
         ax.set_xlabel("number of clients")
         ax.set_ylabel("duration (avg)")
@@ -571,7 +576,22 @@ def run(
     fig2.tight_layout()
     fig2.savefig("duration.png")
 
-    # Plot 3: scatter plots of write-request times.
+    # Plot 3: cost vs number of clients for each strategy, one subplot per control
+    fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
+    for ax, control in zip(axes2, controls):
+        for strategy in strategies:
+            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            ys = [results[(n, strategy, control)][2] for n in xs]  # cost
+            ax.plot(xs, ys, label=strategy)
+        ax.set_xlabel("number of clients")
+        ax.set_ylabel("cost (avg)")
+        ax.legend()
+        ax.set_title(control)
+    fig2.suptitle("Cost")
+    fig2.tight_layout()
+    fig2.savefig("cost.png")
+
+    # Plot 4: scatter plots of write-request times.
     # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
     fig3, axes = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
     for ax, (strategy, control) in zip(axes.flat, product(strategies, controls)):
@@ -614,6 +634,7 @@ if __name__ == "__main__":
     parser.add_argument("--write-mu", type=int)
     parser.add_argument("--write-sigma", type=int)
     parser.add_argument("--repeat", type=int)
+    parser.add_argument("--work-over-duration", type=float)
     args = parser.parse_args()
 
     # rely on simulate()'s defaults for not-provided args
