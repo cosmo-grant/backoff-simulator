@@ -6,6 +6,7 @@ from typing import Callable, Iterator, Protocol
 from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from enum import StrEnum
 
 
@@ -541,7 +542,7 @@ def run(
     strategies = sorted({strategy for _, strategy, _ in results})
 
     # Plot 1: total requests vs number of clients for each strategy, one subplot per control
-    fig1, axes1 = plt.subplots(1, len(controls))
+    fig1, axes1 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
     for ax, control in zip(axes1, controls):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
@@ -552,10 +553,11 @@ def run(
         ax.legend()
         ax.set_title(control)
     fig1.suptitle("Work")
+    fig1.tight_layout()
     fig1.savefig("work.png")
 
     # Plot 2: duration vs number of clients for each strategy, one subplot per control
-    fig2, axes2 = plt.subplots(1, len(controls))
+    fig2, axes2 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
     for ax, control in zip(axes2, controls):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
@@ -566,11 +568,12 @@ def run(
         ax.legend()
         ax.set_title(control)
     fig2.suptitle("Duration")
+    fig2.tight_layout()
     fig2.savefig("duration.png")
 
     # Plot 3: scatter plots of write-request times.
     # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
-    fig3, axes = plt.subplots(len(strategies), len(controls))
+    fig3, axes = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
     for ax, (strategy, control) in zip(axes.flat, product(strategies, controls)):
         sim = groups[(max_clients, strategy, control)][0]  # pick first repetition as representative
         times = []
@@ -582,8 +585,8 @@ def run(
         ax.scatter(times, client_ids, s=4, alpha=0.5)
         ax.set_title(f"{strategy}\n{control}", fontsize=9)
         ax.set_xlabel("time")
-        ax.set_ylabel("client_id")
-        ax.set_yticks(range(max_clients))
+        ax.set_ylabel("client id")
+        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     fig3.suptitle("Write Requests Over Time")
     fig3.tight_layout()
     fig3.savefig("scatter.png")
