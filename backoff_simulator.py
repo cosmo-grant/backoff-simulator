@@ -1,10 +1,11 @@
 import heapq
 import random
 from argparse import ArgumentParser
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import count, product
-from typing import Callable, Iterator, Protocol
+from typing import Protocol
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -415,7 +416,12 @@ class FullJitteredExpo(BackoffStrategy):
 
 
 class Simulation:
-    def __init__(self, server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient] | list[ReadWriteClient], backoff_strategy: BackoffStrategy):
+    def __init__(
+        self,
+        server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer,
+        clients: list[WriteOnlyClient] | list[ReadWriteClient],
+        backoff_strategy: BackoffStrategy,
+    ):
         self.server = server
         self.clients = clients
         self.backoff_strategy = backoff_strategy  # used as metadata
@@ -487,7 +493,7 @@ def set_up_simulations(
     backoff_strategies = [Expo(expo_base, expo_cap), FullJitteredExpo(expo_base, expo_cap)]
 
     simulations: list[Simulation] = []
-    for backoff_strategy, (server_cls, client_cls), num_clients, i in product(
+    for backoff_strategy, (server_cls, client_cls), num_clients, _ in product(
         backoff_strategies,
         concurrency_controls,
         range(1, max_clients + 1),
@@ -549,7 +555,7 @@ def run(
 
     # Plot 1: total requests vs number of clients for each strategy, one subplot per control
     fig1, axes1 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes1, controls):
+    for ax, control in zip(axes1, controls, strict=True):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
             ys = [results[(n, strategy, control)][0] for n in xs]  # requests
@@ -564,7 +570,7 @@ def run(
 
     # Plot 2: duration vs number of clients for each strategy, one subplot per control
     fig2, axes2 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes2, controls):
+    for ax, control in zip(axes2, controls, strict=True):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
             ys = [results[(n, strategy, control)][1] for n in xs]  # duration
@@ -579,7 +585,7 @@ def run(
 
     # Plot 3: cost vs number of clients for each strategy, one subplot per control
     fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes2, controls):
+    for ax, control in zip(axes2, controls, strict=True):
         for strategy in strategies:
             xs = sorted(n for n, s, c in results if s == strategy and c == control)
             ys = [results[(n, strategy, control)][2] for n in xs]  # cost
@@ -595,7 +601,7 @@ def run(
     # Plot 4: scatter plots of write-request times.
     # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
     fig3, axes = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
-    for ax, (strategy, control) in zip(axes.flat, product(strategies, controls)):
+    for ax, (strategy, control) in zip(axes.flat, product(strategies, controls), strict=True):
         sim = groups[(max_clients, strategy, control)][0]  # pick first repetition as representative
         times = []
         client_ids = []
