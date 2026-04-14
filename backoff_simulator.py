@@ -1,6 +1,8 @@
 # /// script
 # requires-python = ">=3.14"
-# dependencies = []
+# dependencies = [
+#     "matplotlib>=3.10.8",
+# ]
 # ///
 
 """
@@ -31,9 +33,10 @@ This script is my own exploration.
 import heapq
 import random
 from dataclasses import dataclass, field
-from itertools import count, repeat
-from typing import Callable, Iterator
+from itertools import count, product
+from typing import Callable, Iterator, Protocol
 
+import matplotlib.pyplot as plt
 from enum import StrEnum
 
 
@@ -61,9 +64,10 @@ class Message:
 class EventType(StrEnum):
     # These happen in all concurrency controls.
     # So use them for a control-independent analysis.
-    CLIENT_REQUESTS_WRITE = "client_requests_write"
+    CLIENT_REQUESTS_WRITE = "client_requests_write"  # counting requests is counting these events
     CLIENT_BACKS_OFF = "client_backs_off"
-    SERVER_COMMITS = "server_commits"
+    SERVER_COMMITS = "server_commits"  # last event is always this type
+
     # These happen in some controls but not others.
     CLIENT_REQUESTS_VERSION = "client_requests_version"
     SERVER_ACCEPTS = "server_accepts"
@@ -417,25 +421,33 @@ class WriteOnlyClient:
         )
 
 
-class Analyzer:
-    def __init__(self, history: list[tuple[float, Event]]):
-        self.history = history
+class BackoffStrategy(Protocol):
+    def get_backoffs(self) -> Iterator[float]: ...
 
-    def total_requests(self) -> int:
-        return sum(1 for _, event in self.history if event.event_type == EventType.CLIENT_REQUESTS_WRITE)
 
-    def duration(self) -> float:
-        # The time at which all client writes committed.
-        time, event = self.history[-1]
-        assert event.event_type == EventType.SERVER_COMMITS, f"{event.event_type=}"
-        return time
+class Expo(BackoffStrategy):
+    def __init__(self, base: int, cap: int):
+        self.base = base
+        self.cap = cap
+
+    def get_backoffs(self) -> Iterator[float]:
+        return (min(self.cap, self.base * 2**n) for n in count())
+
+
+class FullJitteredExpo(BackoffStrategy):
+    def __init__(self, base: int, cap: int):
+        self.base = base
+        self.cap = cap
+
+    def get_backoffs(self) -> Iterator[float]:
+        return (random.uniform(0, t) for t in Expo(self.base, self.cap).get_backoffs())
 
 
 class Simulation:
-    def __init__(self, server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient] | list[ReadWriteClient], label: str):
+    def __init__(self, server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer, clients: list[WriteOnlyClient] | list[ReadWriteClient], backoff_strategy: BackoffStrategy):
         self.server = server
         self.clients = clients
-        self.label = label
+        self.backoff_strategy = backoff_strategy  # used as metadata
         self.time = 0.0  # virtual clock
         self.todos: list[Todo] = []  # heap
         self.history: list[tuple[float, Event]] = []
@@ -467,52 +479,147 @@ class Simulation:
                     ),
                 )
 
+    def total_requests(self) -> int:
+        assert self.history, f"{self.history=}. Have you run the simulation?"
+        return sum(1 for _, event in self.history if event.event_type == EventType.CLIENT_REQUESTS_WRITE)
 
-def expo(base: int, cap: float) -> Iterator[float]:
-    return (min(cap, base * 2**n) for n in count())
+    def duration(self) -> float:
+        # The time at which all client writes committed.
+        assert self.history, f"{self.history=}. Have you run the simulation?"
+        time, event = self.history[-1]
+        assert event.event_type == EventType.SERVER_COMMITS, f"{event.event_type=}"
+        return time
 
 
-def full_jitter(raw: Iterator[float]) -> Iterator[float]:
-    return (random.uniform(0, t) for t in raw)
+def set_up_simulations(
+    max_clients: int,
+    expo_base: int,
+    expo_cap: int,
+    network_mu: int,
+    network_sigma: int,
+    write_mu: int,
+    write_sigma: int,
+    num_repetitions: int,
+) -> list[Simulation]:
+    """
+    Return ready-to-run simulations, for various (client count, backoff strategy, concurrency control) combinations.
 
+    We repeat simulations for any given combination, so we can average out noise when analyzing the results.
+    This function needs to be passed all simulation-relevant parameters.
+    """
+    network = Network(network_mu, network_sigma)
+    concurrency_controls = [
+        (LockingServer, WriteOnlyClient),
+        (WriteOnlyOCCServer, WriteOnlyClient),
+        (ReadWriteOCCServer, ReadWriteClient),
+    ]
+    backoff_strategies = [Expo(expo_base, expo_cap), FullJitteredExpo(expo_base, expo_cap)]
 
-def half_jitter(raw: Iterator[float]) -> Iterator[float]:
-    return (t / 2 + random.uniform(0, t / 2) for t in raw)
+    simulations: list[Simulation] = []
+    for backoff_strategy, (server_cls, client_cls), num_clients, i in product(
+        backoff_strategies,
+        concurrency_controls,
+        range(1, max_clients + 1),
+        range(1, num_repetitions + 1),
+    ):
+        server = server_cls(network, write_mu, write_sigma)
+        simulations.append(
+            Simulation(
+                server,
+                [client_cls(j, network, server, backoff_strategy.get_backoffs()) for j in range(num_clients)],
+                backoff_strategy,
+            )
+        )
 
-
-def normal_jitter(raw: Iterator[float], mu: float, sigma: float) -> Iterator[float]:
-    return (max(0, t + random.gauss(mu, sigma)) for t in raw)
+    return simulations
 
 
 def main() -> None:
-    simulations: list[Simulation] = []
-    network = Network(10, 2)
-    num_clients = 2
-
-    locking_server = LockingServer(network, write_mu=5, write_sigma=1)
-    locking_clients = [WriteOnlyClient(i, network, locking_server, repeat(3)) for i in range(num_clients)]
-    locking_label = "locking, always 3"
-    simulations.append(Simulation(locking_server, locking_clients, locking_label))
-
-    write_only_occ_server = WriteOnlyOCCServer(network, write_mu=5, write_sigma=1)
-    write_only_occ_clients = [WriteOnlyClient(i, network, write_only_occ_server, repeat(3)) for i in range(num_clients)]
-    write_only_occ_label = "write only occ, always 3"
-    simulations.append(Simulation(write_only_occ_server, write_only_occ_clients, write_only_occ_label))
-
-    read_write_occ_server = ReadWriteOCCServer(network, write_mu=5, write_sigma=1)
-    read_write_occ_clients = [ReadWriteClient(i, network, read_write_occ_server, repeat(3)) for i in range(num_clients)]
-    read_write_occ_label = "read-write occ, always 3"
-    simulations.append(Simulation(read_write_occ_server, read_write_occ_clients, read_write_occ_label))
+    max_clients = 10
+    num_repetitions = 10
+    simulations = set_up_simulations(
+        max_clients=max_clients,
+        expo_base=2,
+        expo_cap=10,
+        network_mu=10,
+        network_sigma=2,
+        write_mu=2,
+        write_sigma=1,
+        num_repetitions=num_repetitions,
+    )
 
     for sim in simulations:
         sim.run()
 
+    # Analyze the results.
+    # Group simulations by (num_clients, strategy, concurrency_control).
+    groups: dict[tuple[int, str, str], list[Simulation]] = {}
     for sim in simulations:
-        analyzer = Analyzer(sim.history)
-        print(f"== {sim.label} ==")
-        print(f"requests: {analyzer.total_requests()}, duration: {analyzer.duration():.2f}")
-        for time, event in analyzer.history:
-            print(f"{time:.2f}: {event}")
+        key = (
+            len(sim.clients),
+            type(sim.backoff_strategy).__name__,
+            type(sim.server).__name__,
+        )
+        groups.setdefault(key, []).append(sim)
+
+    # Average per group of total requests and duration.
+    results: dict[tuple[int, str, str], tuple[float, float]] = {}
+    for key, sims in groups.items():
+        avg_requests = sum(s.total_requests() for s in sims) / len(sims)
+        avg_duration = sum(s.duration() for s in sims) / len(sims)
+        results[key] = (avg_requests, avg_duration)
+
+    # We run every strategy-control combination.
+    controls = sorted({control for _, _, control in results})
+    strategies = sorted({strategy for _, strategy, _ in results})
+
+    # Plot 1: total requests vs number of clients for each strategy, one subplot per control
+    fig1, axes1 = plt.subplots(1, len(controls))
+    for ax, control in zip(axes1, controls):
+        for strategy in strategies:
+            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            ys = [results[(n, strategy, control)][0] for n in xs]
+            ax.plot(xs, ys, label=strategy)
+        ax.set_xlabel("number of clients")
+        ax.set_ylabel("total requests (avg)")
+        ax.legend()
+        ax.set_title(control)
+    fig1.suptitle("Work")
+    fig1.savefig("work.png")
+
+    # Plot 2: duration vs number of clients for each strategy, one subplot per control
+    fig2, axes2 = plt.subplots(1, len(controls))
+    for ax, control in zip(axes2, controls):
+        for strategy in strategies:
+            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            ys = [results[(n, strategy, control)][1] for n in xs]
+            ax.plot(xs, ys, label=strategy)
+        ax.set_xlabel("number of clients")
+        ax.set_ylabel("duration (avg)")
+        ax.legend()
+        ax.set_title(control)
+    fig2.suptitle("Duration")
+    fig2.savefig("duration.png")
+
+    # Plot 3: scatter plots of write-request times.
+    # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
+    fig3, axes = plt.subplots(len(strategies), len(controls))
+    for ax, (strategy, control) in zip(axes.flat, product(strategies, controls)):
+        sim = groups[(max_clients, strategy, control)][0]  # pick first repetition as representative
+        times = []
+        client_ids = []
+        for time, event in sim.history:
+            if event.event_type == EventType.CLIENT_REQUESTS_WRITE:
+                times.append(time)
+                client_ids.append(event.client_id)
+        ax.scatter(times, client_ids, s=4, alpha=0.5)
+        ax.set_title(f"{strategy}\n{control}", fontsize=9)
+        ax.set_xlabel("time")
+        ax.set_ylabel("client_id")
+        ax.set_yticks(range(max_clients))
+    fig3.suptitle("Write Requests Over Time")
+    fig3.tight_layout()
+    fig3.savefig("scatter.png")
 
 
 if __name__ == "__main__":
