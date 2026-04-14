@@ -557,7 +557,7 @@ def run(
     fig1, axes1 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
     for ax, control in zip(axes1, controls, strict=True):
         for strategy in strategies:
-            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            xs = range(1, max_clients + 1)
             ys = [results[(n, strategy, control)][0] for n in xs]  # requests
             ax.plot(xs, ys, label=strategy)
         ax.set_xlabel("number of clients")
@@ -572,7 +572,7 @@ def run(
     fig2, axes2 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
     for ax, control in zip(axes2, controls, strict=True):
         for strategy in strategies:
-            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            xs = range(1, max_clients + 1)
             ys = [results[(n, strategy, control)][1] for n in xs]  # duration
             ax.plot(xs, ys, label=strategy)
         ax.set_xlabel("number of clients")
@@ -587,7 +587,7 @@ def run(
     fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
     for ax, control in zip(axes3, controls, strict=True):
         for strategy in strategies:
-            xs = sorted(n for n, s, c in results if s == strategy and c == control)
+            xs = range(1, max_clients + 1)
             ys = [results[(n, strategy, control)][2] for n in xs]  # cost
             ax.plot(xs, ys, label=strategy)
         ax.set_xlabel("number of clients")
