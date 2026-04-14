@@ -1,13 +1,14 @@
 import heapq
 import random
+from argparse import ArgumentParser
 from dataclasses import dataclass, field
+from enum import StrEnum
 from itertools import count, product
 from typing import Callable, Iterator, Protocol
-from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-from enum import StrEnum
+from tabulate import tabulate
 
 
 @dataclass
@@ -616,12 +617,22 @@ def run(
     for strategy, control in product(strategies, controls):
         num_clients = min(max_clients, 3)
         sim = groups[(num_clients, strategy, control)][0]  # pick first repetition as representative
-        print(f"== {control} {strategy} ==")
-        for t, event in sim.history:
-            id = f"client {event.client_id} " if event.client_id is not None else ""
-            detail = f" ({event.event_detail})" if event.event_detail else ""
-            print(f"{t:.02f}: {id}{event.event_type}{detail}")
-        print()
+        print(f"{control} + {strategy}", end="\n\n")
+        print(
+            tabulate(
+                (
+                    (
+                        format(t, ".02f"),
+                        e.client_id if e.client_id is not None else "-",
+                        e.event_type,
+                        e.event_detail if e.event_detail is not None else "",
+                    )
+                    for t, e in sim.history
+                ),
+                headers=["time", "client id", "event type", "event detail"],
+            )
+        )
+        print("\n\n")
 
 
 if __name__ == "__main__":
