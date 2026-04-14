@@ -3,6 +3,7 @@ import random
 from dataclasses import dataclass, field
 from itertools import count, product
 from typing import Callable, Iterator, Protocol
+from argparse import ArgumentParser
 
 import matplotlib.pyplot as plt
 from enum import StrEnum
@@ -467,7 +468,7 @@ def set_up_simulations(
     network_sigma: int,
     write_mu: int,
     write_sigma: int,
-    num_repetitions: int,
+    repeat: int,
 ) -> list[Simulation]:
     """
     Return ready-to-run simulations, for various (client count, backoff strategy, concurrency control) combinations.
@@ -488,7 +489,7 @@ def set_up_simulations(
         backoff_strategies,
         concurrency_controls,
         range(1, max_clients + 1),
-        range(1, num_repetitions + 1),
+        range(1, repeat + 1),
     ):
         server = server_cls(network, write_mu, write_sigma)
         simulations.append(
@@ -502,19 +503,17 @@ def set_up_simulations(
     return simulations
 
 
-def main() -> None:
-    max_clients = 10
-    num_repetitions = 10
-    simulations = set_up_simulations(
-        max_clients=max_clients,
-        expo_base=2,
-        expo_cap=10,
-        network_mu=10,
-        network_sigma=2,
-        write_mu=2,
-        write_sigma=1,
-        num_repetitions=num_repetitions,
-    )
+def run(
+    max_clients: int = 50,
+    expo_base: int = 2,
+    expo_cap: int = 10,
+    network_mu: int = 10,
+    network_sigma: int = 2,
+    write_mu: int = 5,
+    write_sigma: int = 2,
+    repeat: int = 20,
+) -> None:
+    simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
 
     for sim in simulations:
         sim.run()
@@ -603,4 +602,16 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser()
+    parser.add_argument("--max-clients", type=int)
+    parser.add_argument("--expo-base", type=int)
+    parser.add_argument("--expo-cap", type=int)
+    parser.add_argument("--network-mu", type=int)
+    parser.add_argument("--network-sigma", type=int)
+    parser.add_argument("--write-mu", type=int)
+    parser.add_argument("--write-sigma", type=int)
+    parser.add_argument("--repeat", type=int)
+    args = parser.parse_args()
+
+    # rely on simulate()'s defaults for not-provided args
+    run(**{k: v for k, v in vars(args).items() if v is not None})
