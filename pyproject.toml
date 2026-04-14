@@ -1,0 +1,10 @@
+[project]
+name = "backoff-simulator"
+version = "0.1.0"
+description = "Simulates various backoff strategies for contending writes over the network."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "marimo>=0.22.4",
+    "matplotlib>=3.10.8",
+]
