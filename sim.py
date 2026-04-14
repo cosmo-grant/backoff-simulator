@@ -6,9 +6,16 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
-    from backoff_simulator import run
+    import marimo as mo
 
-    return (run,)
+    return (mo,)
+
+
+@app.cell
+def _():
+    from backoff_simulator import make_figures, make_tables, simulate
+
+    return make_figures, make_tables, simulate
 
 
 @app.cell
@@ -23,28 +30,26 @@ def _(mo):
             "write_mu": mo.ui.slider(2, 10, value=5, label="write mu"),
             "write_sigma": mo.ui.slider(1, 5, value=1, label="write sigma"),
             "repeat": mo.ui.slider(1, 100, value=10, label="how many times to run each configuration"),
+            "requests_over_duration": mo.ui.slider(0.1, 10, value=1, label="exchange rate"),
         }
     ).form()
 
-    form
+    form  # noqa: B018
     return (form,)
 
 
 @app.cell
-def _():
-    import marimo as mo
-
-    return (mo,)
-
-
-@app.cell
-def _(form, run):
-    run(**form.value) if form.value else run()
-    return
-
-
-@app.cell
-def _():
+def _(form, mo, simulate, make_figures, make_tables):
+    params = form.value if form.value else {"max_clients": 50, "requests_over_duration": 1}
+    groups = simulate(**params)
+    figs = make_figures(groups, params["max_clients"], params["requests_over_duration"])
+    tables = make_tables(groups, params["max_clients"])
+    mo.vstack(
+        [
+            *[mo.as_html(fig) for fig in figs],
+            mo.md(f"```\n{tables}\n```"),
+        ]
+    )
     return
 
 

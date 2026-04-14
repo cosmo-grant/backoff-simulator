@@ -511,7 +511,12 @@ def set_up_simulations(
     return simulations
 
 
-def run(
+type SimulationType = tuple[int, str, str]  # number of clients, backoff strategy, concurrency control
+type SimulationGroups = dict[SimulationType, list[Simulation]]
+type SimulationResults = dict[SimulationType, tuple[float, float, float]]
+
+
+def simulate(
     max_clients: int = 50,
     expo_base: int = 2,
     expo_cap: int = 10,
@@ -520,16 +525,15 @@ def run(
     write_mu: int = 5,
     write_sigma: int = 2,
     repeat: int = 20,
-    work_over_duration: float = 1,
-) -> None:
+    requests_over_duration: float = 1,
+) -> SimulationGroups:
+    """Run simulations and return them, grouped by type."""
     simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
 
     for sim in simulations:
         sim.run()
 
-    # Analyze the results.
-    # Group simulations by (num_clients, strategy, concurrency_control).
-    groups: dict[tuple[int, str, str], list[Simulation]] = {}
+    groups: SimulationGroups = {}
     for sim in simulations:
         key = (
             len(sim.clients),
@@ -538,18 +542,23 @@ def run(
         )
         groups.setdefault(key, []).append(sim)
 
-    # Average per group of total requests and duration.
-    results: dict[tuple[int, str, str], tuple[float, float, float]] = {}
+    return groups
+
+
+def make_figures(groups: SimulationGroups, max_clients: int, requests_over_duration: float = 1) -> list[tuple[str, plt.Figure]]:
+    """Create and return the analysis figures (without saving to disk)."""
+
+    # Average per group of requests, duration, and cost.
+    results: SimulationResults = {}
     for key, sims in groups.items():
         avg_requests = sum(s.total_requests() for s in sims) / len(sims)
         avg_duration = sum(s.duration() for s in sims) / len(sims)
         # Cost is a measure of performance (lower is better), from combining total requests and duration.
-        # The work_over_duration is the exchange rate of requests to duration.
+        # The requests_over_duration is the exchange rate of requests to duration.
         # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
-        avg_cost = sum(work_over_duration * s.total_requests() + s.duration() for s in sims) / len(sims)
+        avg_cost = sum(requests_over_duration * s.total_requests() + s.duration() for s in sims) / len(sims)
         results[key] = (avg_requests, avg_duration, avg_cost)
 
-    # We run every strategy-control combination.
     controls = sorted({control for _, _, control in results})
     strategies = sorted({strategy for _, strategy, _ in results})
 
@@ -566,7 +575,6 @@ def run(
         ax.set_title(control)
     fig1.suptitle("Work")
     fig1.tight_layout()
-    fig1.savefig("work.png")
 
     # Plot 2: duration vs number of clients for each strategy, one subplot per control
     fig2, axes2 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
@@ -581,7 +589,6 @@ def run(
         ax.set_title(control)
     fig2.suptitle("Duration")
     fig2.tight_layout()
-    fig2.savefig("duration.png")
 
     # Plot 3: cost vs number of clients for each strategy, one subplot per control
     fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
@@ -596,7 +603,6 @@ def run(
         ax.set_title(control)
     fig3.suptitle("Cost")
     fig3.tight_layout()
-    fig3.savefig("cost.png")
 
     # Plot 4: scatter plots of write-request times.
     # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
@@ -616,15 +622,26 @@ def run(
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     fig4.suptitle("Write Requests Over Time")
     fig4.tight_layout()
-    fig4.savefig("scatter.png")
 
-    # Stdout: history of the simulation.
-    # One history per (strategy, control) combination, using an arbitrary sim at a low num_clients.
+    return [("work", fig1), ("duration", fig2), ("cost", fig3), ("scatter", fig4)]
+
+
+def make_tables(
+    groups: SimulationGroups,
+    max_clients: int,
+) -> str:
+    """Return the simulation history tables as a string."""
+
+    controls = sorted({control for _, _, control in groups})
+    strategies = sorted({strategy for _, strategy, _ in groups})
+
+    parts: list[str] = []
     for strategy, control in product(strategies, controls):
         num_clients = min(max_clients, 3)
         sim = groups[(num_clients, strategy, control)][0]  # pick first repetition as representative
-        print(f"{control} + {strategy}", end="\n\n")
-        print(
+        parts.append(f"{control} + {strategy}")
+        parts.append("")
+        parts.append(
             tabulate(
                 (
                     (
@@ -638,7 +655,28 @@ def run(
                 headers=["time", "client id", "event type", "event detail"],
             )
         )
-        print("\n\n")
+        parts.append("\n")
+    return "\n".join(parts)
+
+
+def run(
+    max_clients: int = 50,
+    expo_base: int = 2,
+    expo_cap: int = 10,
+    network_mu: int = 10,
+    network_sigma: int = 2,
+    write_mu: int = 5,
+    write_sigma: int = 2,
+    repeat: int = 20,
+    requests_over_duration: float = 1.0,
+) -> None:
+    groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, requests_over_duration)
+
+    figs = make_figures(groups, max_clients, requests_over_duration)
+    for name, fig in figs:
+        fig.savefig(f"{name}.png")
+
+    print(make_tables(groups, max_clients))
 
 
 if __name__ == "__main__":
