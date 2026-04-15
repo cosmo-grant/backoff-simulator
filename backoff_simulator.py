@@ -520,7 +520,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
             ax.legend()
         fig_m.suptitle(control)
         fig_m.tight_layout()
-        figures.append((control, fig_m))
+        figures.append((f"{control}_metrics", fig_m))
 
         # Scatter figure, one subplot per strategy
         fig_s, axes_s = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
