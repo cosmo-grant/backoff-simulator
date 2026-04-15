@@ -441,7 +441,16 @@ def set_up_simulations(
 
 type SimulationType = tuple[int, str, str]  # number of clients, backoff strategy, concurrency control
 type SimulationGroups = dict[SimulationType, list[Simulation]]
-type SimulationResults = dict[SimulationType, tuple[float, float, float]]
+
+
+@dataclass
+class Metrics:
+    requests: float
+    duration: float
+    cost: float
+
+
+type SimulationResults = dict[SimulationType, Metrics]
 
 
 def simulate(
@@ -485,39 +494,39 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
         # The requests_over_duration is the exchange rate of requests to duration.
         # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
         avg_cost = sum(requests_over_duration * s.total_requests() + s.duration() for s in sims) / len(sims)
-        results[key] = (avg_requests, avg_duration, avg_cost)
+        results[key] = Metrics(avg_requests, avg_duration, avg_cost)
 
     controls = sorted({control for _, _, control in results})
     strategies = sorted({strategy for _, strategy, _ in results})
 
     figures: list[tuple[str, plt.Figure]] = []
 
-    metrics = [
-        ("total requests (avg)", 0),
-        ("duration (avg)", 1),
-        ("cost (avg)", 2),
+    metric_specs = [
+        ("total requests (avg)", "requests"),
+        ("duration (avg)", "duration"),
+        ("cost (avg)", "cost"),
     ]
 
     for control in controls:
-        # One subplot per metric.
-        fig_metrics, axes_metrics = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 5))
-        for ax, (ylabel, idx) in zip(axes_metrics, metrics, strict=True):
+        # Metrics figure, one subplot per metric
+        fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5))
+        for ax, (ylabel, attr) in zip(axes_m, metric_specs, strict=True):
             for strategy in strategies:
                 xs = range(1, max_clients + 1)
-                ys = [results[(n, strategy, control)][idx] for n in xs]
+                ys = [getattr(results[(n, strategy, control)], attr) for n in xs]
                 ax.plot(xs, ys, label=strategy)
             ax.set_xlabel("number of clients")
             ax.set_ylabel(ylabel)
             ax.legend()
-        fig_metrics.suptitle(control)
-        fig_metrics.tight_layout()
-        figures.append((control, fig_metrics))
+        fig_m.suptitle(control)
+        fig_m.tight_layout()
+        figures.append((control, fig_m))
 
-        # One subplot per strategy.
-        fig_scatter, axes_scatter = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
+        # Scatter figure, one subplot per strategy
+        fig_s, axes_s = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
         if len(strategies) == 1:
-            axes_scatter = [axes_scatter]
-        for ax, strategy in zip(axes_scatter, strategies, strict=True):
+            axes_s = [axes_s]
+        for ax, strategy in zip(axes_s, strategies, strict=True):
             sim = groups[(max_clients, strategy, control)][0]
             times = []
             client_ids = []
@@ -530,9 +539,9 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
             ax.set_xlabel("time")
             ax.set_ylabel("client id")
             ax.tick_params(axis="y", which="both", left=False, labelleft=False)
-        fig_scatter.suptitle(f"{control} — Write Requests Over Time")
-        fig_scatter.tight_layout()
-        figures.append((f"{control}_scatter", fig_scatter))
+        fig_s.suptitle(f"{control} — Write Requests Over Time")
+        fig_s.tight_layout()
+        figures.append((f"{control}_scatter", fig_s))
 
     return figures
 
