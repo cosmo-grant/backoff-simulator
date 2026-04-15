@@ -55,8 +55,8 @@ class Event:
     """
 
     event_type: EventType
-    client_id: int | None = None
-    event_detail: str | None = None  # human-readable, free-form
+    client_id: int
+    event_detail: str = ""  # human-readable, free-form
 
 
 type TargetResult = tuple[Event, Message | None]
@@ -110,24 +110,13 @@ class ReadWriteOCCServer:
 
     def handle_read(self, client_id: int, read_response_handler: Callable) -> TargetResult:
         return (
-            Event(
-                EventType.SERVER_REPORTS_VERSION,
-                client_id,
-                f"version={self.version}",
-            ),
-            Message(
-                delay=self.network.delay(),
-                target=read_response_handler,
-                payload=self.version,
-            ),
+            Event(EventType.SERVER_REPORTS_VERSION, client_id, f"version={self.version}"),
+            Message(delay=self.network.delay(), target=read_response_handler, payload=self.version),
         )
 
     def handle_write(self, payload: MaybeCommitPayload, abort_handler: Callable) -> TargetResult:
         return (
-            Event(
-                EventType.SERVER_TENTATIVELY_WRITES,
-                payload.client_id,
-            ),
+            Event(EventType.SERVER_TENTATIVELY_WRITES, payload.client_id),
             Message(
                 delay=self.write_duration(),  # server-internal, so no network delay
                 target=self.maybe_commit,
@@ -142,14 +131,8 @@ class ReadWriteOCCServer:
         if self.version > payload.version:
             # another write committed in the meantime
             return (
-                Event(
-                    EventType.SERVER_ABORTS,
-                    payload.client_id,
-                ),
-                Message(
-                    delay=self.network.delay(),
-                    target=abort_handler,
-                ),
+                Event(EventType.SERVER_ABORTS, payload.client_id),
+                Message(delay=self.network.delay(), target=abort_handler),
             )
         else:
             # The write commits.
@@ -157,11 +140,7 @@ class ReadWriteOCCServer:
             # In effect, clients assume they committed when they don't hear back.
             self.version += 1
             return (
-                Event(
-                    EventType.SERVER_COMMITS,
-                    payload.client_id,
-                    f"version={self.version}",
-                ),
+                Event(EventType.SERVER_COMMITS, payload.client_id, f"version={self.version}"),
                 None,
             )
 
@@ -186,24 +165,13 @@ class ReadWriteClient:
 
     def initiate(self, payload: None, reply_target: None) -> TargetResult:
         return (
-            Event(
-                EventType.CLIENT_REQUESTS_VERSION,
-                self.id,
-            ),
-            Message(
-                delay=self.network.delay(),
-                target=self.server.handle_read,
-                payload=self.id,
-                reply_target=self.handle_read_response,
-            ),
+            Event(EventType.CLIENT_REQUESTS_VERSION, self.id),
+            Message(delay=self.network.delay(), target=self.server.handle_read, payload=self.id, reply_target=self.handle_read_response),
         )
 
     def handle_read_response(self, version: int, reply_target: None) -> TargetResult:
         return (
-            Event(
-                EventType.CLIENT_REQUESTS_WRITE,
-                self.id,
-            ),
+            Event(EventType.CLIENT_REQUESTS_WRITE, self.id),
             Message(
                 delay=self.network.delay(),
                 target=self.server.handle_write,
@@ -214,10 +182,7 @@ class ReadWriteClient:
 
     def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
         return (
-            Event(
-                EventType.CLIENT_BACKS_OFF,
-                self.id,
-            ),
+            Event(EventType.CLIENT_BACKS_OFF, self.id),
             Message(
                 delay=next(self.backoffs),  # client-internal, so no network delay
                 target=self.initiate,
@@ -251,10 +216,7 @@ class WriteOnlyOCCServer:
 
     def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
         return (
-            Event(
-                EventType.SERVER_TENTATIVELY_WRITES,
-                client_id,
-            ),
+            Event(EventType.SERVER_TENTATIVELY_WRITES, client_id),
             Message(
                 delay=self.write_duration(),  # server-internal, so no network delay
                 target=self.maybe_commit,
@@ -269,14 +231,8 @@ class WriteOnlyOCCServer:
         if self.version > payload.version:
             # another write committed in the meantime
             return (
-                Event(
-                    EventType.SERVER_ABORTS,
-                    payload.client_id,
-                ),
-                Message(
-                    delay=self.network.delay(),
-                    target=rejection_handler,
-                ),
+                Event(EventType.SERVER_ABORTS, payload.client_id),
+                Message(delay=self.network.delay(), target=rejection_handler),
             )
         else:
             # The write commits.
@@ -284,11 +240,7 @@ class WriteOnlyOCCServer:
             # In effect, clients assume they committed when they don't hear back.
             self.version += 1
             return (
-                Event(
-                    EventType.SERVER_COMMITS,
-                    payload.client_id,
-                    f"version={self.version}",
-                ),
+                Event(EventType.SERVER_COMMITS, payload.client_id, f"version={self.version}"),
                 None,
             )
 
@@ -318,32 +270,20 @@ class LockingServer:
             # In effect, clients assume they were accepted when they don't hear back.
             # Also, server-internal, so no network delay.
             return (
-                Event(
-                    EventType.SERVER_ACCEPTS,
-                    client_id,
-                ),
-                Message(
-                    delay=self.write_duration(),
-                    target=self.free,
-                ),
+                Event(EventType.SERVER_ACCEPTS, client_id),
+                Message(delay=self.write_duration(), target=self.free, payload=client_id),
             )
         else:
             return (
-                Event(
-                    EventType.SERVER_REJECTS,
-                    client_id,
-                ),
-                Message(
-                    delay=self.network.delay(),
-                    target=rejection_handler,
-                ),
+                Event(EventType.SERVER_REJECTS, client_id),
+                Message(delay=self.network.delay(), target=rejection_handler),
             )
 
-    def free(self, payload: None, reply_target: None) -> TargetResult:
+    def free(self, client_id: int, reply_target: None) -> TargetResult:
         # This is internal server business, not over the network.
         self.available = True
         return (
-            Event(EventType.SERVER_COMMITS),
+            Event(EventType.SERVER_COMMITS, client_id),
             None,
         )
 
@@ -367,24 +307,13 @@ class WriteOnlyClient:
 
     def initiate(self, payload: None, reply_target: None) -> TargetResult:
         return (
-            Event(
-                EventType.CLIENT_REQUESTS_WRITE,
-                self.id,
-            ),
-            Message(
-                delay=self.network.delay(),
-                target=self.server.handle_write,
-                payload=self.id,
-                reply_target=self.handle_abort,
-            ),
+            Event(EventType.CLIENT_REQUESTS_WRITE, self.id),
+            Message(delay=self.network.delay(), target=self.server.handle_write, payload=self.id, reply_target=self.handle_abort),
         )
 
     def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
         return (
-            Event(
-                EventType.CLIENT_BACKS_OFF,
-                self.id,
-            ),
+            Event(EventType.CLIENT_BACKS_OFF, self.id),
             Message(
                 delay=next(self.backoffs),  # client-internal, so no network delay
                 target=self.initiate,
@@ -645,9 +574,9 @@ def make_tables(
                 (
                     (
                         format(t, ".02f"),
-                        e.client_id if e.client_id is not None else "-",
+                        e.client_id,
                         e.event_type,
-                        e.event_detail if e.event_detail is not None else "",
+                        e.event_detail,
                     )
                     for t, e in sim.history
                 ),
