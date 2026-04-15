@@ -482,7 +482,7 @@ def simulate(
     return groups
 
 
-def make_figures(groups: SimulationGroups, max_clients: int, requests_over_duration: float = 1) -> list[tuple[str, plt.Figure]]:
+def make_figures(groups: SimulationGroups, max_clients: int, requests_over_duration: float = 1) -> dict[str, list[tuple[str, plt.Figure]]]:
     """Create and return the analysis figures (without saving to disk)."""
 
     # Average per group of requests, duration, and cost.
@@ -499,7 +499,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
     controls = sorted({control for _, _, control in results})
     strategies = sorted({strategy for _, strategy, _ in results})
 
-    figures: list[tuple[str, plt.Figure]] = []
+    figures: dict[str, list[tuple[str, plt.Figure]]] = {}
 
     metric_specs = [
         ("total requests (avg)", "requests"),
@@ -520,7 +520,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
             ax.legend()
         fig_m.suptitle(control)
         fig_m.tight_layout()
-        figures.append((f"{control}_metrics", fig_m))
+        figures.setdefault("metrics", []).append((control, fig_m))
 
         # Scatter figure, one subplot per strategy
         fig_s, axes_s = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
@@ -541,7 +541,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
             ax.tick_params(axis="y", which="both", left=False, labelleft=False)
         fig_s.suptitle(f"{control} — Write Requests Over Time")
         fig_s.tight_layout()
-        figures.append((f"{control}_scatter", fig_s))
+        figures.setdefault("scatter", []).append((control, fig_s))
 
     return figures
 
@@ -593,8 +593,9 @@ def run(
     groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, requests_over_duration)
 
     figs = make_figures(groups, max_clients, requests_over_duration)
-    for name, fig in figs:
-        fig.savefig(f"{name}.png")
+    for kind, figs_ in figs.items():
+        for control, fig in figs_:
+            fig.savefig(f"{control}_{kind}.png")
 
     print(make_tables(groups, max_clients))
 
