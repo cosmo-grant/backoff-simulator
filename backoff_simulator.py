@@ -549,34 +549,31 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
 def make_tables(
     groups: SimulationGroups,
     max_clients: int,
-) -> str:
+) -> dict[tuple[str, str], str]:
     """Return the simulation history tables as a string."""
 
     controls = sorted({control for _, _, control in groups})
     strategies = sorted({strategy for _, strategy, _ in groups})
 
-    parts: list[str] = []
+    tables: dict[tuple[str, str], str] = {}
     for strategy, control in product(strategies, controls):
         num_clients = min(max_clients, 3)
         sim = groups[(num_clients, strategy, control)][0]  # pick first repetition as representative
-        parts.append(f"{control} + {strategy}")
-        parts.append("")
-        parts.append(
-            tabulate(
+        table = tabulate(
+            (
                 (
-                    (
-                        format(t, ".02f"),
-                        e.client_id,
-                        e.event_type,
-                        e.event_detail,
-                    )
-                    for t, e in sim.history
-                ),
-                headers=["time", "client id", "event type", "event detail"],
-            )
+                    format(t, ".02f"),
+                    e.client_id,
+                    e.event_type,
+                    e.event_detail,
+                )
+                for t, e in sim.history
+            ),
+            headers=["time", "client id", "event type", "event detail"],
         )
-        parts.append("\n")
-    return "\n".join(parts)
+        tables[(strategy, control)] = table
+
+    return tables
 
 
 def run(
@@ -597,7 +594,9 @@ def run(
         for control, fig in figs_:
             fig.savefig(f"{control}_{kind}.png")
 
-    print(make_tables(groups, max_clients))
+    tables = make_tables(groups, max_clients)
+    for (strategy, control), table in tables.items():
+        print(f"{control} + {strategy}\n\n{table}")
 
 
 if __name__ == "__main__":
