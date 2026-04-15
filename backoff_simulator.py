@@ -490,68 +490,51 @@ def make_figures(groups: SimulationGroups, max_clients: int, requests_over_durat
     controls = sorted({control for _, _, control in results})
     strategies = sorted({strategy for _, strategy, _ in results})
 
-    # Plot 1: total requests vs number of clients for each strategy, one subplot per control
-    fig1, axes1 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes1, controls, strict=True):
-        for strategy in strategies:
-            xs = range(1, max_clients + 1)
-            ys = [results[(n, strategy, control)][0] for n in xs]  # requests
-            ax.plot(xs, ys, label=strategy)
-        ax.set_xlabel("number of clients")
-        ax.set_ylabel("total requests (avg)")
-        ax.legend()
-        ax.set_title(control)
-    fig1.suptitle("Work")
-    fig1.tight_layout()
+    figures: list[tuple[str, plt.Figure]] = []
 
-    # Plot 2: duration vs number of clients for each strategy, one subplot per control
-    fig2, axes2 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes2, controls, strict=True):
-        for strategy in strategies:
-            xs = range(1, max_clients + 1)
-            ys = [results[(n, strategy, control)][1] for n in xs]  # duration
-            ax.plot(xs, ys, label=strategy)
-        ax.set_xlabel("number of clients")
-        ax.set_ylabel("duration (avg)")
-        ax.legend()
-        ax.set_title(control)
-    fig2.suptitle("Duration")
-    fig2.tight_layout()
+    metrics = [
+        ("total requests (avg)", 0),
+        ("duration (avg)", 1),
+        ("cost (avg)", 2),
+    ]
 
-    # Plot 3: cost vs number of clients for each strategy, one subplot per control
-    fig3, axes3 = plt.subplots(1, len(controls), figsize=(5 * len(controls), 5), sharey=True)
-    for ax, control in zip(axes3, controls, strict=True):
-        for strategy in strategies:
-            xs = range(1, max_clients + 1)
-            ys = [results[(n, strategy, control)][2] for n in xs]  # cost
-            ax.plot(xs, ys, label=strategy)
-        ax.set_xlabel("number of clients")
-        ax.set_ylabel("cost (avg)")
-        ax.legend()
-        ax.set_title(control)
-    fig3.suptitle("Cost")
-    fig3.tight_layout()
+    for control in controls:
+        # One subplot per metric.
+        fig_metrics, axes_metrics = plt.subplots(1, len(metrics), figsize=(5 * len(metrics), 5))
+        for ax, (ylabel, idx) in zip(axes_metrics, metrics, strict=True):
+            for strategy in strategies:
+                xs = range(1, max_clients + 1)
+                ys = [results[(n, strategy, control)][idx] for n in xs]
+                ax.plot(xs, ys, label=strategy)
+            ax.set_xlabel("number of clients")
+            ax.set_ylabel(ylabel)
+            ax.legend()
+        fig_metrics.suptitle(control)
+        fig_metrics.tight_layout()
+        figures.append((control, fig_metrics))
 
-    # Plot 4: scatter plots of write-request times.
-    # One subplot per (strategy, control) combination, using an arbitrary sim at max num_clients.
-    fig4, axes4 = plt.subplots(len(strategies), len(controls), figsize=(5 * len(controls), 5 * len(strategies)))
-    for ax, (strategy, control) in zip(axes4.flat, product(strategies, controls), strict=True):
-        sim = groups[(max_clients, strategy, control)][0]  # pick first repetition as representative
-        times = []
-        client_ids = []
-        for time, event in sim.history:
-            if event.event_type == EventType.CLIENT_REQUESTS_WRITE:
-                times.append(time)
-                client_ids.append(event.client_id)
-        ax.scatter(times, client_ids, s=4, alpha=0.5)
-        ax.set_title(f"{strategy}\n{control}", fontsize=9)
-        ax.set_xlabel("time")
-        ax.set_ylabel("client id")
-        ax.tick_params(axis="y", which="both", left=False, labelleft=False)
-    fig4.suptitle("Write Requests Over Time")
-    fig4.tight_layout()
+        # One subplot per strategy.
+        fig_scatter, axes_scatter = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
+        if len(strategies) == 1:
+            axes_scatter = [axes_scatter]
+        for ax, strategy in zip(axes_scatter, strategies, strict=True):
+            sim = groups[(max_clients, strategy, control)][0]
+            times = []
+            client_ids = []
+            for time, event in sim.history:
+                if event.event_type == EventType.CLIENT_REQUESTS_WRITE:
+                    times.append(time)
+                    client_ids.append(event.client_id)
+            ax.scatter(times, client_ids, s=4, alpha=0.5)
+            ax.set_title(strategy, fontsize=9)
+            ax.set_xlabel("time")
+            ax.set_ylabel("client id")
+            ax.tick_params(axis="y", which="both", left=False, labelleft=False)
+        fig_scatter.suptitle(f"{control} — Write Requests Over Time")
+        fig_scatter.tight_layout()
+        figures.append((f"{control}_scatter", fig_scatter))
 
-    return [("work", fig1), ("duration", fig2), ("cost", fig3), ("scatter", fig4)]
+    return figures
 
 
 def make_tables(
