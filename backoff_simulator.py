@@ -660,7 +660,7 @@ def run(
 
     tables = make_tables(groups, max_clients)
     for (strategy, control), table in tables.items():
-        print(f"{control} + {strategy}\n\n{table}")
+        print(f"{control} + {strategy}\n\n{table}\n")
 
 
 if __name__ == "__main__":
