@@ -26,10 +26,12 @@ def _(mo):
     So there’s a **tradeoff**.
 
     The **cost** is a combined measure of duration and work.
-    It's set by a work-to-duration exchange rate, say
+    It's set by a work-to-duration exchange rate:
+    how much you weight work compared to duration.
+    For example:
     - 1 if you think 1 extra request and 1 extra ms are equally bad
-    - or 5 if you think 5 extra requests and 1 extra ms are equally bad
-    - or 0.2 if you think 1 extra request and 5 extra ms are equally bad.
+    - 5 if you think 1 extra request and 5 extra ms are equally bad
+    - 0.2 if you think 5 extra request and 1 extra ms are equally bad.
 
     There's a famous aws blog post and simulation script about this:
     - https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter
@@ -604,9 +606,9 @@ def _():
         for key, sims in groups.items():
             avg_requests = sum(s.work() for s in sims) / len(sims)
             avg_duration = sum(s.duration() for s in sims) / len(sims)
-            # Cost is a measure of performance (lower is better), from combining total requests and duration.
-            # The work_to_duration is the exchange rate of requests to duration.
-            # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
+            # Cost is a measure of performance (lower is better), from combining work and duration.
+            # The work_to_duration is the exchange rate between them.
+            # For example, a value of 5 means you're indifferent between 1 extra request vs 5 extra milliseconds.
             avg_cost = sum(work_to_duration * s.work() + s.duration() for s in sims) / len(sims)
             results[key] = Metrics(avg_requests, avg_duration, avg_cost)
 

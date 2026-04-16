@@ -535,9 +535,9 @@ def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: f
     for key, sims in groups.items():
         avg_requests = sum(s.work() for s in sims) / len(sims)
         avg_duration = sum(s.duration() for s in sims) / len(sims)
-        # Cost is a measure of performance (lower is better), from combining total requests and duration.
-        # The work_to_duration is the exchange rate of requests to duration.
-        # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
+        # Cost is a measure of performance (lower is better), from combining work and duration.
+        # The work_to_duration is the exchange rate between them.
+        # For example, a value of 5 means you're indifferent between 1 extra request vs 5 extra milliseconds.
         avg_cost = sum(work_to_duration * s.work() + s.duration() for s in sims) / len(sims)
         results[key] = Metrics(avg_requests, avg_duration, avg_cost)
 
