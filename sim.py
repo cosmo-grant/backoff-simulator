@@ -80,7 +80,6 @@ def _(mo):
     form = (
         mo.Html("""
         <style>
-            .params-table td:nth-child(2) input {{ width: 20px; }}
             .params-table td {{ padding: 4px 80px; }}
         </style>
         <table class="params-table">
