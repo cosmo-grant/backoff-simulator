@@ -126,7 +126,7 @@ def _(form, mo, params):
 @app.cell
 def _(figs, mo):
     metrics_tabs = mo.ui.tabs({control: mo.as_html(fig) for control, fig in figs["metrics"]})
-    metrics_tabs
+    metrics_tabs  # noqa: B018
     return
 
 
@@ -145,7 +145,7 @@ def _(form, mo, params):
 @app.cell
 def _(figs, mo):
     scatter_tabs = mo.ui.tabs({control: mo.as_html(fig) for control, fig in figs["scatter"]})
-    scatter_tabs
+    scatter_tabs  # noqa: B018
     return
 
 
@@ -190,7 +190,9 @@ def _(mo):
     - Then it checks the version again:
       - if different, it aborts
       - if the same, it commits and increments the version
-    - The writes are variable-duration. (Else a write would succeed just if no write was in progress when it arrived. So we'd end up with a locking server except it knowably does doomed-to-abort work.)
+    - The writes are variable-duration.
+      (Else a write would succeed just if no write was in progress when it arrived.
+      So we'd end up with a locking server except it knowably does doomed-to-abort work.)
 
     **Read-write  OCC server:**
     - The server stores a version number.
