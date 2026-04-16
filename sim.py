@@ -94,13 +94,13 @@ def _(mo):
         """)
         .batch(
             max_clients=mo.ui.number(start=1, stop=100, step=1, value=50),
-            constant=mo.ui.number(start=0.1, stop=2, step=0.1, value=0.5),
-            expo_base=mo.ui.number(start=1, stop=10, step=1, value=2),
-            expo_cap=mo.ui.number(start=2, stop=50, step=1, value=10),
-            network_mu=mo.ui.number(start=2, stop=10, step=1, value=10),
-            network_sigma=mo.ui.number(start=1, stop=5, step=1, value=2),
-            write_mu=mo.ui.number(start=2, stop=10, step=1, value=5),
-            write_sigma=mo.ui.number(start=1, stop=5, step=1, value=1),
+            constant=mo.ui.number(start=0.0, stop=10, step=0.1, value=0.5),
+            expo_base=mo.ui.number(start=0.0, stop=10, step=0.1, value=2),
+            expo_cap=mo.ui.number(start=0.0, stop=5000, step=100, value=1000),
+            network_mu=mo.ui.number(start=0.0, stop=50, step=0.1, value=10),
+            network_sigma=mo.ui.number(start=0.0, stop=10, step=0.1, value=2),
+            write_mu=mo.ui.number(start=0.0, stop=50, step=0.1, value=2),
+            write_sigma=mo.ui.number(start=0.0, stop=10, step=0.1, value=1),
             repeat=mo.ui.number(start=1, stop=100, step=1, value=20),
             work_to_duration=mo.ui.number(start=0.1, stop=10, step=0.1, value=1),
         )
