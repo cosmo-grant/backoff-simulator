@@ -13,7 +13,7 @@ MODULE = ROOT / "backoff_simulator.py"
 INLINED = ROOT / "inlined.py"
 
 IMPORT_CELL = dedent("""\
-    @app.cell
+    @app.cell(hide_code=True)
     def _():
         from backoff_simulator import make_figures, make_tables, simulate
 

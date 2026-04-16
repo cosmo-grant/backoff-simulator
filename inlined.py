@@ -58,7 +58,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     import marimo as mo
 
@@ -735,7 +735,7 @@ def _():
     return make_figures, make_tables, simulate
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     form = (
         mo.Html("""
@@ -774,7 +774,7 @@ def _(mo):
     return (form,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(form, make_figures, make_tables, mo, simulate):
     mo.stop(form.value is None)
     params = form.value
@@ -795,7 +795,7 @@ def _(form, mo, params):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(figs, mo):
     metrics_tabs = mo.ui.tabs({control: mo.as_html(fig) for control, fig in figs["metrics"]})
     metrics_tabs  # noqa: B018
@@ -814,7 +814,7 @@ def _(form, mo, params):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(figs, mo):
     scatter_tabs = mo.ui.tabs({control: mo.as_html(fig) for control, fig in figs["scatter"]})
     scatter_tabs  # noqa: B018
@@ -830,14 +830,14 @@ def _(form, mo, params):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, tables):
     options = {f"{control} + {strategy}": mo.md(f"```\n{table}\n```") for (control, strategy), table in tables.items()}
     dropdown = mo.ui.dropdown(list(options), value=list(options)[0])
     return dropdown, options
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(dropdown, mo, options):
     mo.vstack([dropdown, options[dropdown.value]])
     return
