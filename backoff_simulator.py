@@ -106,7 +106,7 @@ class ReadWriteOCCServer:
         self.write_sigma = write_sigma
 
     def write_duration(self) -> float:
-        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
+        return abs(random.gauss(self.write_mu, self.write_sigma))
 
     def handle_read(self, client_id: int, read_response_handler: Callable) -> TargetResult:
         return (
@@ -167,7 +167,7 @@ class WriteOnlyOCCServer:
         self.write_sigma = write_sigma
 
     def write_duration(self) -> float:
-        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
+        return abs(random.gauss(self.write_mu, self.write_sigma))
 
     def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
         return (
@@ -216,7 +216,7 @@ class LockingServer:
         self.write_sigma = write_sigma
 
     def write_duration(self) -> float:
-        return max(0, random.gauss(self.write_mu, self.write_sigma))  # TODO: maybe abs instead of max, else 0 gets too much mass?
+        return abs(random.gauss(self.write_mu, self.write_sigma))
 
     def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
         if self.available:
