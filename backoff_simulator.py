@@ -468,7 +468,7 @@ def set_up_simulations(
         backoff_strategies,
         concurrency_controls,
         get_client_nums(max_clients),
-        range(1, repeat + 1),
+        range(repeat),
     ):
         server = server_cls(network, write_mu, write_sigma)
         simulations.append(
