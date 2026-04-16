@@ -1,6 +1,5 @@
 import heapq
 import random
-from argparse import ArgumentParser
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -664,6 +663,8 @@ def run(
 
 
 if __name__ == "__main__":
+    from argparse import ArgumentParser
+
     parser = ArgumentParser()
     parser.add_argument("--max-clients", type=int, default=50)
     parser.add_argument("--constant", type=float, default=0.5)
