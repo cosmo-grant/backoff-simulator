@@ -1,3 +1,3 @@
 # Backoff Simulator
 
-[![Open in marimo](https://marimo.io/shield.svg)](https://marimo.app/gh/cosmo-grant/backoff-simulator/inlined.py)
+[![Open in molab](https://molab.marimo.io/molab-shield.svg)](https://molab.marimo.io/github/cosmo-grant/backoff-simulator/blob/main/inlined.py/wasm)
