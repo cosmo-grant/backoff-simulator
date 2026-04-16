@@ -540,7 +540,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: f
             ax.set_xlabel("time")
             ax.set_ylabel("client id")
             ax.tick_params(axis="y", which="both", left=False, labelleft=False)
-        fig_s.suptitle(f"{control} — Write Requests Over Time")
+        fig_s.suptitle({control})
         fig_s.tight_layout()
         figures.setdefault("scatter", []).append((control, fig_s))
 
