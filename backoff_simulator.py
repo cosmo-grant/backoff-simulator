@@ -384,7 +384,8 @@ class Simulation:
                     ),
                 )
 
-    def total_requests(self) -> int:
+    def work(self) -> int:
+        """Get the total number of client write requests."""
         assert self.history, f"{self.history=}. Have you run the simulation?"
         return sum(1 for _, event in self.history if event.event_type == EventType.CLIENT_REQUESTS_WRITE)
 
@@ -462,7 +463,7 @@ def simulate(
     write_mu: int,
     write_sigma: int,
     repeat: int,
-    requests_over_duration: float,
+    work_to_duration: float,
 ) -> SimulationGroups:
     """Run simulations and return them, grouped by type."""
     simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
@@ -482,18 +483,18 @@ def simulate(
     return groups
 
 
-def make_figures(groups: SimulationGroups, max_clients: int, requests_over_duration: float = 1) -> dict[str, list[tuple[str, plt.Figure]]]:
+def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: float = 1) -> dict[str, list[tuple[str, plt.Figure]]]:
     """Create and return the analysis figures (without saving to disk)."""
 
     # Average per group of requests, duration, and cost.
     results: SimulationResults = {}
     for key, sims in groups.items():
-        avg_requests = sum(s.total_requests() for s in sims) / len(sims)
+        avg_requests = sum(s.work() for s in sims) / len(sims)
         avg_duration = sum(s.duration() for s in sims) / len(sims)
         # Cost is a measure of performance (lower is better), from combining total requests and duration.
-        # The requests_over_duration is the exchange rate of requests to duration.
+        # The work_to_duration is the exchange rate of requests to duration.
         # For example, a value of 5 means you're indifferent between 5 extra requests vs 1 extra millisecond.
-        avg_cost = sum(requests_over_duration * s.total_requests() + s.duration() for s in sims) / len(sims)
+        avg_cost = sum(work_to_duration * s.work() + s.duration() for s in sims) / len(sims)
         results[key] = Metrics(avg_requests, avg_duration, avg_cost)
 
     controls = sorted({control for _, _, control in results})
@@ -585,11 +586,11 @@ def run(
     write_mu: int = 5,
     write_sigma: int = 2,
     repeat: int = 20,
-    requests_over_duration: float = 1.0,
+    work_to_duration: float = 1.0,
 ) -> None:
-    groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, requests_over_duration)
+    groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, work_to_duration)
 
-    figs = make_figures(groups, max_clients, requests_over_duration)
+    figs = make_figures(groups, max_clients, work_to_duration)
     for kind, figs_ in figs.items():
         for control, fig in figs_:
             fig.savefig(f"{control}_{kind}.png")
@@ -609,7 +610,7 @@ if __name__ == "__main__":
     parser.add_argument("--write-mu", type=int, default=2)
     parser.add_argument("--write-sigma", type=int, default=1)
     parser.add_argument("--repeat", type=int, default=20)
-    parser.add_argument("--requests-over-duration", type=float, default=1)
+    parser.add_argument("--work-to-duration", type=float, default=1)
     args = parser.parse_args()
 
     run(**vars(args))
