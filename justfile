@@ -1,7 +1,8 @@
 checks:
-  ty check
-  ruff check --fix
-  ruff format
+  ty check --exclude inlined.py
+  ruff check --fix --exclude inlined.py
+  ruff format --exclude inlined.py
+  marimo check --fix notebook.py inlined.py
   uv run backoff_simulator.py --repeat 2 --max-clients 3
 
 inline:
