@@ -74,6 +74,7 @@ def _(mo):
         </style>
         <table class="params-table">
             <tr><td><strong>max clients</strong></td><td>{max_clients}</td></tr>
+            <tr><td><strong>constant</strong></td><td>{constant}</td></tr>
             <tr><td><strong>expo base</strong></td><td>{expo_base}</td></tr>
             <tr><td><strong>expo cap</strong></td><td>{expo_cap}</td></tr>
             <tr><td><strong>network mu</strong></td><td>{network_mu}</td></tr>
@@ -86,6 +87,7 @@ def _(mo):
         """)
         .batch(
             max_clients=mo.ui.number(start=1, stop=100, step=1, value=50),
+            constant=mo.ui.number(start=0.1, stop=2, step=0.1, value=0.5),
             expo_base=mo.ui.number(start=1, stop=10, step=1, value=2),
             expo_cap=mo.ui.number(start=2, stop=50, step=1, value=10),
             network_mu=mo.ui.number(start=2, stop=10, step=1, value=10),
@@ -213,6 +215,10 @@ def _(mo):
     How do clients back off?
     I focus on the following strategies, where $n$ is the attempt number.
 
+    **Constant:**
+    - $c$ for all $n$
+    - this relies entirely on network and write variance to spread out requests
+
     **Capped exponential backoff:**
     - $min(c, b \cdot 2^n)$
     - e.g. for $c=10, b=2$ this gives $2, 4, 8, 10, 10, ...$
@@ -220,6 +226,11 @@ def _(mo):
     **Full jittered exponential backoff:**
     - $U(0, min(c, b \times 2^n))$
     - i.e. a value picked uniformly at random between 0 and the capped exponential backoff
+
+    **Equal jittered exponential backoff:**
+    - $min(c, b \times 2^n)) / 2 + U(0, min(c, b \times 2^n) / 2)$
+    - i.e. half the capped exponential backoff, plus a value picked uniformly
+      at random between 0 and half the capped exponential backoff
     """)
     return
 

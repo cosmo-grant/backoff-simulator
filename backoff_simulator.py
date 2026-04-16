@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
-from itertools import count, product
+from itertools import count, product, repeat
 from typing import Protocol
 
 import matplotlib.pyplot as plt
@@ -326,6 +326,14 @@ class BackoffStrategy(Protocol):
     def get_backoffs(self) -> Iterator[float]: ...
 
 
+class Constant(BackoffStrategy):
+    def __init__(self, constant: float):
+        self.constant = constant
+
+    def get_backoffs(self) -> Iterator[float]:
+        return repeat(self.constant)
+
+
 class Expo(BackoffStrategy):
     def __init__(self, base: int, cap: int):
         self.base = base
@@ -342,6 +350,15 @@ class FullJitteredExpo(BackoffStrategy):
 
     def get_backoffs(self) -> Iterator[float]:
         return (random.uniform(0, t) for t in Expo(self.base, self.cap).get_backoffs())
+
+
+class EqualJitteredExpo(BackoffStrategy):
+    def __init__(self, base: int, cap: int):
+        self.base = base
+        self.cap = cap
+
+    def get_backoffs(self) -> Iterator[float]:
+        return (t / 2 + random.uniform(0, t / 2) for t in Expo(self.base, self.cap).get_backoffs())
 
 
 class Simulation:
@@ -400,6 +417,7 @@ class Simulation:
 
 def set_up_simulations(
     max_clients: int,
+    constant: float,
     expo_base: int,
     expo_cap: int,
     network_mu: int,
@@ -420,7 +438,12 @@ def set_up_simulations(
         (WriteOnlyOCCServer, WriteOnlyClient),
         (ReadWriteOCCServer, ReadWriteClient),
     ]
-    backoff_strategies = [Expo(expo_base, expo_cap), FullJitteredExpo(expo_base, expo_cap)]
+    backoff_strategies = [
+        Constant(constant),
+        Expo(expo_base, expo_cap),
+        FullJitteredExpo(expo_base, expo_cap),
+        EqualJitteredExpo(expo_base, expo_cap),
+    ]
 
     simulations: list[Simulation] = []
     for backoff_strategy, (server_cls, client_cls), num_clients, _ in product(
@@ -457,6 +480,7 @@ type SimulationResults = dict[SimulationType, Metrics]
 
 def simulate(
     max_clients: int,
+    constant: float,
     expo_base: int,
     expo_cap: int,
     network_mu: int,
@@ -467,7 +491,7 @@ def simulate(
     work_to_duration: float,
 ) -> SimulationGroups:
     """Run simulations and return them, grouped by type."""
-    simulations = set_up_simulations(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
+    simulations = set_up_simulations(max_clients, constant, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
 
     for sim in simulations:
         sim.run()
@@ -581,6 +605,7 @@ def make_tables(
 
 def run(
     max_clients: int,
+    constant: float,
     expo_base: int,
     expo_cap: int,
     network_mu: int,
@@ -590,7 +615,18 @@ def run(
     repeat: int,
     work_to_duration: float,
 ) -> None:
-    groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, work_to_duration)
+    groups = simulate(
+        max_clients,
+        constant,
+        expo_base,
+        expo_cap,
+        network_mu,
+        network_sigma,
+        write_mu,
+        write_sigma,
+        repeat,
+        work_to_duration,
+    )
 
     figs = make_figures(groups, max_clients, work_to_duration)
     for kind, figs_ in figs.items():
@@ -605,6 +641,7 @@ def run(
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--max-clients", type=int, default=50)
+    parser.add_argument("--constant", type=float, default=0.5)
     parser.add_argument("--expo-base", type=int, default=2)
     parser.add_argument("--expo-cap", type=int, default=10)
     parser.add_argument("--network-mu", type=int, default=5)
