@@ -20,19 +20,39 @@ def _():
 
 @app.cell
 def _(mo):
-    form = mo.ui.dictionary(
-        {
-            "max_clients": mo.ui.number(start=1, stop=100, step=1, value=50, label="max clients"),
-            "expo_base": mo.ui.number(start=1, stop=10, step=1, value=2, label="expo base"),
-            "expo_cap": mo.ui.number(start=2, stop=10, step=1, value=10, label="expo cap"),
-            "network_mu": mo.ui.number(start=2, stop=10, step=1, value=10, label="network mu"),
-            "network_sigma": mo.ui.number(start=1, stop=5, step=1, value=2, label="network sigma"),
-            "write_mu": mo.ui.number(start=2, stop=10, step=1, value=5, label="write mu"),
-            "write_sigma": mo.ui.number(start=1, stop=5, step=1, value=1, label="write sigma"),
-            "repeat": mo.ui.number(start=1, stop=100, step=1, value=20, label="repeat count"),
-            "requests_over_duration": mo.ui.number(start=0.1, stop=10, step=0.1, value=1, label="requests over duration"),
-        }
-    ).form()
+    form = (
+        mo.Html(
+            """
+        <style>
+            .params-table td:nth-child(2) input {{ width: 80px; }}
+            .params-table td {{ padding: 4px 8px; }}
+        </style>
+        <table class="params-table">
+            <tr><td><strong>Max clients</strong></td><td>{max_clients}</td></tr>
+            <tr><td><strong>Expo base</strong></td><td>{expo_base}</td></tr>
+            <tr><td><strong>Expo cap</strong></td><td>{expo_cap}</td></tr>
+            <tr><td><strong>Network mu</strong></td><td>{network_mu}</td></tr>
+            <tr><td><strong>Network sigma</strong></td><td>{network_sigma}</td></tr>
+            <tr><td><strong>Write mu</strong></td><td>{write_mu}</td></tr>
+            <tr><td><strong>Write sigma</strong></td><td>{write_sigma}</td></tr>
+            <tr><td><strong>Repeat count</strong></td><td>{repeat}</td></tr>
+            <tr><td><strong>Requests over duration</strong></td><td>{requests_over_duration}</td></tr>
+        </table>
+        """
+        )
+        .batch(
+            max_clients=mo.ui.number(start=1, stop=100, step=1, value=50),
+            expo_base=mo.ui.number(start=1, stop=10, step=1, value=2),
+            expo_cap=mo.ui.number(start=2, stop=10, step=1, value=10),
+            network_mu=mo.ui.number(start=2, stop=10, step=1, value=10),
+            network_sigma=mo.ui.number(start=1, stop=5, step=1, value=2),
+            write_mu=mo.ui.number(start=2, stop=10, step=1, value=5),
+            write_sigma=mo.ui.number(start=1, stop=5, step=1, value=1),
+            repeat=mo.ui.number(start=1, stop=100, step=1, value=20),
+            requests_over_duration=mo.ui.number(start=0.1, stop=10, step=0.1, value=1),
+        )
+        .form()
+    )
 
     form  # noqa: B018
     return (form,)
