@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 
 
-@dataclass
+@dataclass(frozen=True)
 class MaybeCommitPayload:
     version: int
     client_id: int
@@ -48,7 +48,7 @@ class EventType(StrEnum):
     SERVER_ABORTS = "server_aborts"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Event:
     """
     A simulation produces a timed sequence of events: everything of interest that happened, for later analysis.
@@ -443,7 +443,7 @@ type SimulationType = tuple[int, str, str]  # number of clients, backoff strateg
 type SimulationGroups = dict[SimulationType, list[Simulation]]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Metrics:
     requests: float
     duration: float
