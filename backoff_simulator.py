@@ -72,7 +72,7 @@ class Todo:
 
     time: float
     target: Callable[..., TargetResult] = field(compare=False)
-    payload: int | None = field(compare=False, default=None)
+    payload: int | MaybeCommitPayload | None = field(compare=False, default=None)
     reply_target: Callable | None = field(compare=False, default=None)
 
 
