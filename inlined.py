@@ -67,6 +67,8 @@ def _():
 
 @app.cell(hide_code=True)
 def _():
+    from __future__ import annotations
+
     import heapq
     import random
     from collections.abc import Callable, Iterator
