@@ -335,7 +335,7 @@ class Constant(BackoffStrategy):
 
 
 class Expo(BackoffStrategy):
-    def __init__(self, base: int, cap: int):
+    def __init__(self, base: float, cap: float):
         self.base = base
         self.cap = cap
 
@@ -344,7 +344,7 @@ class Expo(BackoffStrategy):
 
 
 class FullJitteredExpo(BackoffStrategy):
-    def __init__(self, base: int, cap: int):
+    def __init__(self, base: float, cap: float):
         self.base = base
         self.cap = cap
 
@@ -353,7 +353,7 @@ class FullJitteredExpo(BackoffStrategy):
 
 
 class EqualJitteredExpo(BackoffStrategy):
-    def __init__(self, base: int, cap: int):
+    def __init__(self, base: float, cap: float):
         self.base = base
         self.cap = cap
 
@@ -436,12 +436,12 @@ def get_client_nums(max_clients: int) -> list[int]:
 def set_up_simulations(
     max_clients: int,
     constant: float,
-    expo_base: int,
-    expo_cap: int,
-    network_mu: int,
-    network_sigma: int,
-    write_mu: int,
-    write_sigma: int,
+    expo_base: float,
+    expo_cap: float,
+    network_mu: float,
+    network_sigma: float,
+    write_mu: float,
+    write_sigma: float,
     repeat: int,
 ) -> list[Simulation]:
     """
@@ -499,12 +499,12 @@ type SimulationResults = dict[SimulationType, Metrics]
 def simulate(
     max_clients: int,
     constant: float,
-    expo_base: int,
-    expo_cap: int,
-    network_mu: int,
-    network_sigma: int,
-    write_mu: int,
-    write_sigma: int,
+    expo_base: float,
+    expo_cap: float,
+    network_mu: float,
+    network_sigma: float,
+    write_mu: float,
+    write_sigma: float,
     repeat: int,
     work_to_duration: float,
 ) -> SimulationGroups:
@@ -631,12 +631,12 @@ def make_tables(
 def run(
     max_clients: int,
     constant: float,
-    expo_base: int,
-    expo_cap: int,
-    network_mu: int,
-    network_sigma: int,
-    write_mu: int,
-    write_sigma: int,
+    expo_base: float,
+    expo_cap: float,
+    network_mu: float,
+    network_sigma: float,
+    write_mu: float,
+    write_sigma: float,
     repeat: int,
     work_to_duration: float,
 ) -> None:
@@ -667,14 +667,17 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--max-clients", type=int, default=50)
     parser.add_argument("--constant", type=float, default=0.5)
-    parser.add_argument("--expo-base", type=int, default=2)
-    parser.add_argument("--expo-cap", type=int, default=10)
-    parser.add_argument("--network-mu", type=int, default=5)
-    parser.add_argument("--network-sigma", type=int, default=1)
-    parser.add_argument("--write-mu", type=int, default=2)
-    parser.add_argument("--write-sigma", type=int, default=1)
+    parser.add_argument("--expo-base", type=float, default=2)
+    parser.add_argument("--expo-cap", type=float, default=10)
+    parser.add_argument("--network-mu", type=float, default=5)
+    parser.add_argument("--network-sigma", type=float, default=1)
+    parser.add_argument("--write-mu", type=float, default=2)
+    parser.add_argument("--write-sigma", type=float, default=1)
     parser.add_argument("--repeat", type=int, default=20)
     parser.add_argument("--work-to-duration", type=float, default=1)
     args = parser.parse_args()
+    args = vars(args)
 
-    run(**vars(args))
+    # crude validation, e.g. max_clients should not be 0, but good enough
+    assert all(v >= 0 for v in args.values()), f"All values must be non-negative.\nGiven: {args}"
+    run(**args)
