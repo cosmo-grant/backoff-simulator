@@ -415,6 +415,24 @@ class Simulation:
         return time
 
 
+def get_client_nums(max_clients: int) -> list[int]:
+    """
+    Return a list of 1, ..., max_clients with a suitable step.
+
+    Suppose max_clients is 100.
+    It's slow and wasteful to run simulations for 1, 2, ..., 100 clients.
+    Better to pick a step, e.g. 5, and run for 1, 6, 11, ..., 96, 100.
+    Always includes 1 and max_clients.
+    """
+
+    max_values = 20
+    if max_clients <= max_values:
+        return list(range(1, max_clients + 1))
+    else:
+        step = (max_clients - 1) / (max_values - 1)
+        return [round(1 + i * step) for i in range(max_values)]
+
+
 def set_up_simulations(
     max_clients: int,
     constant: float,
@@ -449,7 +467,7 @@ def set_up_simulations(
     for backoff_strategy, (server_cls, client_cls), num_clients, _ in product(
         backoff_strategies,
         concurrency_controls,
-        range(1, max_clients + 1),
+        get_client_nums(max_clients),
         range(1, repeat + 1),
     ):
         server = server_cls(network, write_mu, write_sigma)
@@ -538,7 +556,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: f
         fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5))
         for ax, (ylabel, attr) in zip(axes_m, metric_specs, strict=True):
             for strategy in strategies:
-                xs = range(1, max_clients + 1)
+                xs = get_client_nums(max_clients)
                 ys = [getattr(results[(n, strategy, control)], attr) for n in xs]
                 ax.plot(xs, ys, label=strategy)
             ax.set_xlabel("number of clients")
@@ -584,10 +602,15 @@ def make_tables(
     controls = sorted({control for _, _, control in groups})
     strategies = sorted({strategy for _, strategy, _ in groups})
 
+    client_nums = sorted(get_client_nums(max_clients))
+    smallest_interesting = next(
+        (n for n in client_nums if n > 2),
+        2 if 2 in client_nums else 1,
+    )
+
     tables: dict[tuple[str, str], str] = {}
     for strategy, control in product(strategies, controls):
-        num_clients = min(max_clients, 3)
-        sim = groups[(num_clients, strategy, control)][0]  # pick first repetition as representative
+        sim = groups[(smallest_interesting, strategy, control)][0]  # pick first repetition as representative
         table = tabulate(
             (
                 (
