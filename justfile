@@ -10,7 +10,7 @@ inline:
 
 # same params as aws simulation
 # aws sim doesn't model write delay, so we set it to 0
-# aws repeats 100 times but my machines can't cope with that
+# aws repeats 100 times but my machine can't cope with that
 aws-params:
   uv run backoff_simulator.py \
     --max-clients 200 \
