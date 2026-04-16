@@ -580,15 +580,15 @@ def make_tables(
 
 
 def run(
-    max_clients: int = 50,
-    expo_base: int = 2,
-    expo_cap: int = 10,
-    network_mu: int = 10,
-    network_sigma: int = 2,
-    write_mu: int = 5,
-    write_sigma: int = 2,
-    repeat: int = 20,
-    work_to_duration: float = 1.0,
+    max_clients: int,
+    expo_base: int,
+    expo_cap: int,
+    network_mu: int,
+    network_sigma: int,
+    write_mu: int,
+    write_sigma: int,
+    repeat: int,
+    work_to_duration: float,
 ) -> None:
     groups = simulate(max_clients, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat, work_to_duration)
 
