@@ -145,51 +145,6 @@ class ReadWriteOCCServer:
             )
 
 
-class ReadWriteClient:
-    """
-    Simulates a client sending read-then-write requests to a server over the network.
-
-    It reads the version number, then tries to write, passing the version.
-    If the write succeeds, it stops.
-    Else, it backs off and retries.
-    """
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({self.id!r})"
-
-    def __init__(self, id: int, network: Network, server: ReadWriteOCCServer, backoffs: Iterator[float]):
-        self.id = id
-        self.network = network
-        self.server = server
-        self.backoffs = backoffs
-
-    def initiate(self, payload: None, reply_target: None) -> TargetResult:
-        return (
-            Event(EventType.CLIENT_REQUESTS_VERSION, self.id),
-            Message(delay=self.network.delay(), target=self.server.handle_read, payload=self.id, reply_target=self.handle_read_response),
-        )
-
-    def handle_read_response(self, version: int, reply_target: None) -> TargetResult:
-        return (
-            Event(EventType.CLIENT_REQUESTS_WRITE, self.id),
-            Message(
-                delay=self.network.delay(),
-                target=self.server.handle_write,
-                payload=MaybeCommitPayload(version, self.id),
-                reply_target=self.handle_abort,
-            ),
-        )
-
-    def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
-        return (
-            Event(EventType.CLIENT_BACKS_OFF, self.id),
-            Message(
-                delay=next(self.backoffs),  # client-internal, so no network delay
-                target=self.initiate,
-            ),
-        )
-
-
 class WriteOnlyOCCServer:
     """
     Simulates a server receiving contending write requests, using write-only optimistic concurrency control.
@@ -309,6 +264,51 @@ class WriteOnlyClient:
         return (
             Event(EventType.CLIENT_REQUESTS_WRITE, self.id),
             Message(delay=self.network.delay(), target=self.server.handle_write, payload=self.id, reply_target=self.handle_abort),
+        )
+
+    def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
+        return (
+            Event(EventType.CLIENT_BACKS_OFF, self.id),
+            Message(
+                delay=next(self.backoffs),  # client-internal, so no network delay
+                target=self.initiate,
+            ),
+        )
+
+
+class ReadWriteClient:
+    """
+    Simulates a client sending read-then-write requests to a server over the network.
+
+    It reads the version number, then tries to write, passing the version.
+    If the write succeeds, it stops.
+    Else, it backs off and retries.
+    """
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id!r})"
+
+    def __init__(self, id: int, network: Network, server: ReadWriteOCCServer, backoffs: Iterator[float]):
+        self.id = id
+        self.network = network
+        self.server = server
+        self.backoffs = backoffs
+
+    def initiate(self, payload: None, reply_target: None) -> TargetResult:
+        return (
+            Event(EventType.CLIENT_REQUESTS_VERSION, self.id),
+            Message(delay=self.network.delay(), target=self.server.handle_read, payload=self.id, reply_target=self.handle_read_response),
+        )
+
+    def handle_read_response(self, version: int, reply_target: None) -> TargetResult:
+        return (
+            Event(EventType.CLIENT_REQUESTS_WRITE, self.id),
+            Message(
+                delay=self.network.delay(),
+                target=self.server.handle_write,
+                payload=MaybeCommitPayload(version, self.id),
+                reply_target=self.handle_abort,
+            ),
         )
 
     def handle_abort(self, payload: None, reply_target: None) -> TargetResult:
