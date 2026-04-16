@@ -8,6 +8,7 @@ from itertools import count, product
 from typing import Protocol
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from tabulate import tabulate
 
 
@@ -518,6 +519,7 @@ def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: f
                 ax.plot(xs, ys, label=strategy)
             ax.set_xlabel("number of clients")
             ax.set_ylabel(ylabel)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax.legend()
         fig_m.suptitle(control)
         fig_m.tight_layout()
