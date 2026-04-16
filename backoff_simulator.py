@@ -572,7 +572,7 @@ def make_tables(
                 )
                 for t, e in sim.history
             ),
-            headers=["time", "client id", "event type", "event detail"],
+            headers=["time", "client_id", "event_type", "event_detail"],
         )
         tables[(strategy, control)] = table
 
