@@ -549,11 +549,13 @@ def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: f
         fig_m.tight_layout()
         figures.setdefault("metrics", []).append((control, fig_m))
 
-        # Scatter figure, one subplot per strategy
-        fig_s, axes_s = plt.subplots(1, len(strategies), figsize=(5 * len(strategies), 5), sharey=True)
-        if len(strategies) == 1:
-            axes_s = [axes_s]
-        for ax, strategy in zip(axes_s, strategies, strict=True):
+        # Scatter figure, one subplot per strategy in a 2-column grid
+        nrows = (len(strategies) + 1) // 2
+        fig_s, axes_s = plt.subplots(nrows, 2, squeeze=False, figsize=(10, 5 * nrows))
+        axes_flat = axes_s.flatten()
+        for ax in axes_flat[len(strategies) :]:
+            ax.set_visible(False)
+        for ax, strategy in zip(axes_flat, strategies, strict=False):
             sim = groups[(max_clients, strategy, control)][0]
             times = []
             client_ids = []
