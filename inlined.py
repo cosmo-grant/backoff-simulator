@@ -1,3 +1,11 @@
+# /// script
+# dependencies = [
+#     "marimo",
+#     "matplotlib",
+#     "tabulate",
+# ]
+# ///
+
 import marimo
 
 __generated_with = "0.22.4"
