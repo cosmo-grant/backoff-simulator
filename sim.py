@@ -38,6 +38,13 @@ def _(mo):
     This app is based on those.
     But I re-implemented the simulation (til about heap-based priority queues) and added a few bells and whistles.
 
+    The blog post is clear:
+
+    > The return on implementation complexity of using jittered backoff is huge,
+    and it should be considered a standard approach for remote clients.
+
+    But is that true of **your use case**?
+
     **Let's explore.**
     """)
     return
