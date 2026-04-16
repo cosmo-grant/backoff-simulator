@@ -9,16 +9,6 @@ def _(mo):
     mo.md(r"""
     # Backoff Simulator
 
-    Simulate backoff strategies for contending writes over the network.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""
-    ## Background
-
     Many clients request over the network that the server write a particular value.
     If writes contend, only one commits.
     Clients back off and retry until their write commits.
@@ -48,7 +38,7 @@ def _(mo):
     This app is based on those.
     But I re-implemented the simulation (til about heap-based priority queues) and added a few bells and whistles.
 
-    Let's explore.
+    **Let's explore.**
     """)
     return
 
@@ -163,7 +153,7 @@ def _(figs, mo):
 def _(form, mo, params):
     mo.stop(form.value is None)
     mo.md(rf"""
-        ### Simulation Log With {min(3, params["max_clients"])} Clients
+        ### Log With {min(3, params["max_clients"])} Clients
     """)
     return
 
