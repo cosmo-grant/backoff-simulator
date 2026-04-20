@@ -1,12 +1,14 @@
 # CONTRIBUTING
 
-## Division of labour
+Release a version:
 
-- simulation code goes in `backoff_simulator.py`
-- marimo-specific stuff (ui elements, markdown etc) goes in `notebook.py`
-- `notebook.py` imports what it needs from `backoff_simulator.py`
-- run `just inline` to generate a version of the notebook with imports in-lined
-- share `inlined.py` on molab
+```
+# update version in pyproject.toml
+uv build --clear
+git tag vX.Y.Z
+git push --tags
+uv publish --token "$TOKEN"
+```
 
 ## Notes
 
