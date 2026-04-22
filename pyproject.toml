@@ -11,7 +11,10 @@ classifiers = [
 ]
 license = "MIT"
 license-files = ["LICENSE"]
-dependencies = ["marimo>=0.22.4", "matplotlib>=3.10.8", "tabulate>=0.10.0"]
+dependencies = [
+ "matplotlib>=3.10.8",
+ "tabulate>=0.10.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/cosmo-grant/backoff-simulator"
