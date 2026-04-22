@@ -1,6 +1,6 @@
 [project]
 name = "backoff-simulator"
-version = "0.1.0"
+version = "0.1.1"
 authors = [{ name = "Cosmo Grant", email = "cosmodgrant@gmail.com" }]
 description = "Simulates backoff strategies for contending writes over the network."
 readme = "README.md"
