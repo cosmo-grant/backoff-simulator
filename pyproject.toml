@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [{ name = "Cosmo Grant", email = "cosmodgrant@gmail.com" }]
 description = "Simulates backoff strategies for contending writes over the network."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
