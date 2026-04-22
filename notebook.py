@@ -1,5 +1,6 @@
 # /// script
 # dependencies = [
+#     "backoff-simulator",
 #     "marimo",
 #     "matplotlib",
 #     "tabulate",
