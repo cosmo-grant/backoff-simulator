@@ -36,10 +36,8 @@ class Message:
 
 class EventType(StrEnum):
     # These happen in all concurrency controls.
-    # So use them for a control-independent analysis.
     CLIENT_REQUESTS_WRITE = "client_requests_write"  # counting requests is counting these events
     CLIENT_BACKS_OFF = "client_backs_off"
-    SERVER_COMMITS = "server_commits"  # last event is always this type
 
     # These happen in some controls but not others.
     CLIENT_REQUESTS_VERSION = "client_requests_version"
@@ -48,6 +46,8 @@ class EventType(StrEnum):
     SERVER_REPORTS_VERSION = "server_reports_version"
     SERVER_TENTATIVELY_WRITES = "server_tentatively_writes"
     SERVER_ABORTS = "server_aborts"
+    SERVER_DECREMENTS = "server_decrements"  # last event for throttling server
+    SERVER_COMMITS = "server_commits"  # last event for other servers
 
 
 @dataclass(frozen=True)
@@ -85,6 +85,40 @@ class Network:
 
     def delay(self) -> float:
         return max(0, random.gauss(self.mu, self.sigma))
+
+
+class ThrottlingServer:
+    """
+    Simulates a server receiving writes, throttling any over its limit in a sliding window.
+    """
+
+    def __init__(self, network: Network, limit: int, window: float):
+        self.network = network
+        self.limit = limit
+        self.count = 0
+        self.window = window
+
+    def handle_write(self, client_id: int, rejection_handler: Callable) -> TargetResult:
+        assert 0 <= self.count <= self.limit, f"{self.count=}"
+        if self.count == self.limit:
+            return (
+                Event(EventType.SERVER_REJECTS, client_id),
+                Message(delay=self.network.delay(), target=rejection_handler),
+            )
+        else:
+            self.count += 1
+            # No need to tell the client the good news.
+            # In effect, clients assume they were accepted when they don't hear back.
+            # Also, server-internal, so no network delay.
+            return (
+                Event(EventType.SERVER_ACCEPTS, client_id, f"count={self.count}"),
+                Message(delay=self.window, target=self.decrement, payload=client_id),
+            )
+
+    def decrement(self, client_id: int, reply_target: None) -> TargetResult:
+        # This is internal server business, not over the network.
+        self.count -= 1
+        return (Event(EventType.SERVER_DECREMENTS, client_id, f"count={self.count}"), None)
 
 
 class ReadWriteOCCServer:
@@ -365,7 +399,7 @@ class EqualJitteredExpo(BackoffStrategy):
 class Simulation:
     def __init__(
         self,
-        server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer,
+        server: ReadWriteOCCServer | WriteOnlyOCCServer | LockingServer | ThrottlingServer,
         clients: list[WriteOnlyClient] | list[ReadWriteClient],
         backoff_strategy: BackoffStrategy,
     ):
@@ -409,10 +443,10 @@ class Simulation:
         return sum(1 for _, event in self.history if event.event_type == EventType.CLIENT_REQUESTS_WRITE)
 
     def duration(self) -> float:
-        # The time at which all client writes committed.
+        # The time at which all client requests have been fully dealt with.
         assert self.history, f"{self.history=}. Have you run the simulation?"
         time, event = self.history[-1]
-        assert event.event_type == EventType.SERVER_COMMITS, f"{event.event_type=}"
+        assert event.event_type in (EventType.SERVER_COMMITS, EventType.SERVER_DECREMENTS), f"{event.event_type=}"
         return time
 
 
@@ -443,6 +477,8 @@ def set_up_simulations(
     network_sigma: float,
     write_mu: float,
     write_sigma: float,
+    limit: int,
+    window: float,
     repeat: int,
 ) -> list[Simulation]:
     """
@@ -453,9 +489,10 @@ def set_up_simulations(
     """
     network = Network(network_mu, network_sigma)
     concurrency_controls = [
-        (LockingServer, WriteOnlyClient),
-        (WriteOnlyOCCServer, WriteOnlyClient),
-        (ReadWriteOCCServer, ReadWriteClient),
+        (lambda network: ThrottlingServer(network, limit, window), WriteOnlyClient),
+        (lambda network: LockingServer(network, write_mu, write_sigma), WriteOnlyClient),
+        (lambda network: WriteOnlyOCCServer(network, write_mu, write_sigma), WriteOnlyClient),
+        (lambda network: ReadWriteOCCServer(network, write_mu, write_sigma), ReadWriteClient),
     ]
     backoff_strategies = [
         Constant(constant),
@@ -465,13 +502,13 @@ def set_up_simulations(
     ]
 
     simulations: list[Simulation] = []
-    for backoff_strategy, (server_cls, client_cls), num_clients, _ in product(
+    for backoff_strategy, (server_factory, client_cls), num_clients, _ in product(
         backoff_strategies,
         concurrency_controls,
         get_client_nums(max_clients),
         range(repeat),
     ):
-        server = server_cls(network, write_mu, write_sigma)
+        server = server_factory(network)
         simulations.append(
             Simulation(
                 server,
@@ -506,11 +543,25 @@ def simulate(
     network_sigma: float,
     write_mu: float,
     write_sigma: float,
+    limit: int,
+    window: float,
     repeat: int,
     work_to_duration: float,
 ) -> SimulationGroups:
     """Run simulations and return them, grouped by type."""
-    simulations = set_up_simulations(max_clients, constant, expo_base, expo_cap, network_mu, network_sigma, write_mu, write_sigma, repeat)
+    simulations = set_up_simulations(
+        max_clients,
+        constant,
+        expo_base,
+        expo_cap,
+        network_mu,
+        network_sigma,
+        write_mu,
+        write_sigma,
+        limit,
+        window,
+        repeat,
+    )
 
     for sim in simulations:
         sim.run()
@@ -638,6 +689,8 @@ def run(
     network_sigma: float,
     write_mu: float,
     write_sigma: float,
+    limit: int,
+    window: float,
     repeat: int,
     work_to_duration: float,
 ) -> None:
@@ -650,6 +703,8 @@ def run(
         network_sigma,
         write_mu,
         write_sigma,
+        limit,
+        window,
         repeat,
         work_to_duration,
     )
