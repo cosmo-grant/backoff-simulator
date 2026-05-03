@@ -1,12 +1,3 @@
-# /// script
-# dependencies = [
-#     "backoff-simulator",
-#     "marimo",
-#     "matplotlib",
-#     "tabulate",
-# ]
-# ///
-
 import marimo
 
 __generated_with = "0.22.4"
@@ -99,6 +90,8 @@ def _(mo):
             <tr><td><strong>network sigma</strong></td><td>{network_sigma}</td></tr>
             <tr><td><strong>write mu</strong></td><td>{write_mu}</td></tr>
             <tr><td><strong>write sigma</strong></td><td>{write_sigma}</td></tr>
+            <tr><td><strong>limit</strong></td><td>{limit}</td></tr>
+            <tr><td><strong>window</strong></td><td>{window}</td></tr>
             <tr><td><strong>repeat</strong></td><td>{repeat}</td></tr>
             <tr><td><strong>work to duration</strong></td><td>{work_to_duration}</td></tr>
         </table>
@@ -112,6 +105,8 @@ def _(mo):
             network_sigma=mo.ui.number(start=0.0, stop=10, step=0.1, value=2),
             write_mu=mo.ui.number(start=0.0, stop=50, step=0.1, value=2),
             write_sigma=mo.ui.number(start=0.0, stop=10, step=0.1, value=1),
+            limit=mo.ui.number(start=1, stop=50, step=1, value=10),
+            window=mo.ui.number(start=0.0, stop=50, step=0.1, value=1),
             repeat=mo.ui.number(start=1, stop=100, step=1, value=20),
             work_to_duration=mo.ui.number(start=0.1, stop=10, step=0.1, value=1),
         )
