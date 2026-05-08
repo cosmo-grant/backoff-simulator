@@ -516,7 +516,7 @@ def set_up_simulations(spec: Spec) -> list[Simulation]:
         simulations.append(
             Simulation(
                 server,
-                [client_cls(j, network, server, backoff_strategy.get_backoffs()) for j in range(num_clients)],
+                [client_cls(j, network, server, backoff_strategy.get_backoffs()) for j in range(num_clients)],  # ty:ignore[invalid-argument-type]
                 backoff_strategy,
             )
         )
