@@ -23,7 +23,7 @@ class Spec:
     network_sigma: float
     work_to_duration: float
     control: str
-    control_params: dict[str, float]
+    control_params: dict[str, int | float]
     strategies: list[BackoffConfig]
 
 
