@@ -31,7 +31,7 @@ def _(mo):
     For example:
     - 1 if you think 1 extra request and 1 extra ms are equally bad
     - 5 if you think 1 extra request and 5 extra ms are equally bad
-    - 0.2 if you think 5 extra request and 1 extra ms are equally bad.
+    - 0.2 if you think 5 extra requests and 1 extra ms are equally bad.
 
     There's a famous aws blog post and simulation script about this:
     - https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter
