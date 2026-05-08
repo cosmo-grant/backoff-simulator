@@ -6,7 +6,10 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import count, product, repeat
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from .config import Spec
 
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -468,51 +471,52 @@ def get_client_nums(max_clients: int) -> list[int]:
         return [round(1 + i * step) for i in range(max_values)]
 
 
-def set_up_simulations(
-    max_clients: int,
-    constant: float,
-    expo_base: float,
-    expo_cap: float,
-    network_mu: float,
-    network_sigma: float,
-    write_mu: float,
-    write_sigma: float,
-    limit: int,
-    window: float,
-    repeat: int,
-) -> list[Simulation]:
+def set_up_simulations(spec: Spec) -> list[Simulation]:
     """
-    Return ready-to-run simulations, for various (client count, backoff strategy, concurrency control) combinations.
+    Return ready-to-run simulations given a spec.
+    """
+    network = Network(spec.network_mu, spec.network_sigma)
 
-    We repeat simulations for any given combination, so we can average out noise when analyzing the results.
-    This function needs to be passed all simulation-relevant parameters.
-    """
-    network = Network(network_mu, network_sigma)
-    concurrency_controls = [
-        (lambda network: ThrottlingServer(network, limit, window), WriteOnlyClient),
-        (lambda network: LockingServer(network, write_mu, write_sigma), WriteOnlyClient),
-        (lambda network: WriteOnlyOCCServer(network, write_mu, write_sigma), WriteOnlyClient),
-        (lambda network: ReadWriteOCCServer(network, write_mu, write_sigma), ReadWriteClient),
-    ]
-    backoff_strategies = [
-        Constant(constant),
-        Expo(expo_base, expo_cap),
-        FullJitteredExpo(expo_base, expo_cap),
-        EqualJitteredExpo(expo_base, expo_cap),
-    ]
+    server_factories = {
+        "ThrottlingServer": (
+            lambda net, params: ThrottlingServer(net, params["limit"], params["window"]),
+            WriteOnlyClient,
+        ),
+        "LockingServer": (
+            lambda net, params: LockingServer(net, params["write_mu"], params["write_sigma"]),
+            WriteOnlyClient,
+        ),
+        "WriteOnlyOCCServer": (
+            lambda net, params: WriteOnlyOCCServer(net, params["write_mu"], params["write_sigma"]),
+            WriteOnlyClient,
+        ),
+        "ReadWriteOCCServer": (
+            lambda net, params: ReadWriteOCCServer(net, params["write_mu"], params["write_sigma"]),
+            ReadWriteClient,
+        ),
+    }
+
+    strategy_factories = {
+        "Constant": lambda params: Constant(**params),
+        "Expo": lambda params: Expo(**params),
+        "FullJitteredExpo": lambda params: FullJitteredExpo(**params),
+        "EqualJitteredExpo": lambda params: EqualJitteredExpo(**params),
+    }
+
+    server_factory_fn, client_cls = server_factories[spec.control]
+    backoff_strategies = [strategy_factories[s.type](s.params) for s in spec.strategies]
 
     simulations: list[Simulation] = []
-    for backoff_strategy, (server_factory, client_cls), num_clients, _ in product(
+    for backoff_strategy, num_clients, _ in product(
         backoff_strategies,
-        concurrency_controls,
-        get_client_nums(max_clients),
-        range(repeat),
+        get_client_nums(spec.max_clients),
+        range(spec.repeat),
     ):
-        server = server_factory(network)
+        server = server_factory_fn(network, spec.control_params)
         simulations.append(
             Simulation(
                 server,
-                [client_cls(j, network, server, backoff_strategy.get_backoffs()) for j in range(num_clients)],  # ty: ignore[invalid-argument-type]  # checker can't see server/client type correlation
+                [client_cls(j, network, server, backoff_strategy.get_backoffs()) for j in range(num_clients)],
                 backoff_strategy,
             )
         )
@@ -520,8 +524,9 @@ def set_up_simulations(
     return simulations
 
 
-type SimulationType = tuple[int, str, str]  # number of clients, backoff strategy, concurrency control
-type SimulationGroups = dict[SimulationType, list[Simulation]]
+type SimType = tuple[int, str]  # (num_clients, strategy_name)
+type SimGroups = dict[SimType, list[Simulation]]  # the list has repeat-many simulations
+type SimResults = dict[SimType, Metrics]
 
 
 @dataclass(frozen=True)
@@ -531,138 +536,91 @@ class Metrics:
     cost: float
 
 
-type SimulationResults = dict[SimulationType, Metrics]
-
-
-def simulate(
-    max_clients: int,
-    constant: float,
-    expo_base: float,
-    expo_cap: float,
-    network_mu: float,
-    network_sigma: float,
-    write_mu: float,
-    write_sigma: float,
-    limit: int,
-    window: float,
-    repeat: int,
-    work_to_duration: float,
-) -> SimulationGroups:
-    """Run simulations and return them, grouped by type."""
-    simulations = set_up_simulations(
-        max_clients,
-        constant,
-        expo_base,
-        expo_cap,
-        network_mu,
-        network_sigma,
-        write_mu,
-        write_sigma,
-        limit,
-        window,
-        repeat,
-    )
-
+def simulate(spec: Spec) -> SimGroups:
+    """Run all simulations for a spec and return them grouped by (num_clients, strategy_name)."""
+    simulations = set_up_simulations(spec)
     for sim in simulations:
         sim.run()
 
-    groups: SimulationGroups = {}
+    groups: SimGroups = {}
     for sim in simulations:
-        key = (
-            len(sim.clients),
-            type(sim.backoff_strategy).__name__,
-            type(sim.server).__name__,
-        )
+        key = (len(sim.clients), type(sim.backoff_strategy).__name__)
         groups.setdefault(key, []).append(sim)
 
     return groups
 
 
-def make_figures(groups: SimulationGroups, max_clients: int, work_to_duration: float = 1) -> dict[str, list[tuple[str, plt.Figure]]]:
-    """Create and return the analysis figures (without saving to disk)."""
+def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
+    """Create metrics and scatter figures for a spec."""
 
-    # Average per group of requests, duration, and cost.
-    results: SimulationResults = {}
+    # Compute average metrics per (num_clients, strategy).
+    results: dict[SimType, Metrics] = {}
     for key, sims in groups.items():
         avg_requests = sum(s.work() for s in sims) / len(sims)
         avg_duration = sum(s.duration() for s in sims) / len(sims)
-        # Cost is a measure of performance (lower is better), from combining work and duration.
-        # The work_to_duration is the exchange rate between them.
-        # For example, a value of 5 means you're indifferent between 1 extra request vs 5 extra milliseconds.
-        avg_cost = sum(work_to_duration * s.work() + s.duration() for s in sims) / len(sims)
+        avg_cost = sum(spec.work_to_duration * s.work() + s.duration() for s in sims) / len(sims)
         results[key] = Metrics(avg_requests, avg_duration, avg_cost)
 
-    controls = sorted({control for _, _, control in results})
-    strategies = sorted({strategy for _, strategy, _ in results})
+    strategies = sorted({strategy for _, strategy in results})
 
-    figures: dict[str, list[tuple[str, plt.Figure]]] = {}
-
+    # Metrics figure: one subplot per metric, one line per strategy.
     metric_specs = [
         ("total requests (avg)", "requests"),
         ("duration (avg)", "duration"),
         ("cost (avg)", "cost"),
     ]
+    fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5))
+    for ax, (ylabel, attr) in zip(axes_m, metric_specs, strict=True):
+        for strategy in strategies:
+            xs = get_client_nums(spec.max_clients)
+            ys = [getattr(results[(n, strategy)], attr) for n in xs]
+            ax.plot(xs, ys, label=strategy)
+        ax.set_xlabel("number of clients")
+        ax.set_ylabel(ylabel)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.legend()
+    fig_m.suptitle(spec.control)
+    fig_m.tight_layout()
 
-    for control in controls:
-        # Metrics figure, one subplot per metric
-        fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5))
-        for ax, (ylabel, attr) in zip(axes_m, metric_specs, strict=True):
-            for strategy in strategies:
-                xs = get_client_nums(max_clients)
-                ys = [getattr(results[(n, strategy, control)], attr) for n in xs]
-                ax.plot(xs, ys, label=strategy)
-            ax.set_xlabel("number of clients")
-            ax.set_ylabel(ylabel)
-            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-            ax.legend()
-        fig_m.suptitle(control)
-        fig_m.tight_layout()
-        figures.setdefault("metrics", []).append((control, fig_m))
+    # Scatter figure: one subplot per strategy.
+    nrows = (len(strategies) + 1) // 2
+    fig_s, axes_s = plt.subplots(nrows, 2, squeeze=False, figsize=(10, 5 * nrows))
+    axes_flat = axes_s.flatten()
+    for ax in axes_flat[len(strategies) :]:
+        ax.set_visible(False)
+    for ax, strategy in zip(axes_flat, strategies, strict=False):
+        sim = groups[(spec.max_clients, strategy)][0]
+        times = []
+        client_ids = []
+        for time, event in sim.history:
+            if event.event_type == EventType.CLIENT_REQUESTS_WRITE:
+                times.append(time)
+                client_ids.append(event.client_id)
+        ax.scatter(times, client_ids, s=4, alpha=0.5)
+        ax.set_title(strategy, fontsize=9)
+        ax.set_xlabel("time")
+        ax.set_ylabel("client id")
+        ax.tick_params(axis="y", which="both", left=False, labelleft=False)
+    fig_s.suptitle(spec.control)
+    fig_s.tight_layout()
 
-        # Scatter figure, one subplot per strategy in a 2-column grid
-        nrows = (len(strategies) + 1) // 2
-        fig_s, axes_s = plt.subplots(nrows, 2, squeeze=False, figsize=(10, 5 * nrows))
-        axes_flat = axes_s.flatten()
-        for ax in axes_flat[len(strategies) :]:
-            ax.set_visible(False)
-        for ax, strategy in zip(axes_flat, strategies, strict=False):
-            sim = groups[(max_clients, strategy, control)][0]
-            times = []
-            client_ids = []
-            for time, event in sim.history:
-                if event.event_type == EventType.CLIENT_REQUESTS_WRITE:
-                    times.append(time)
-                    client_ids.append(event.client_id)
-            ax.scatter(times, client_ids, s=4, alpha=0.5)
-            ax.set_title(strategy, fontsize=9)
-            ax.set_xlabel("time")
-            ax.set_ylabel("client id")
-            ax.tick_params(axis="y", which="both", left=False, labelleft=False)
-        fig_s.suptitle(control)
-        fig_s.tight_layout()
-        figures.setdefault("scatter", []).append((control, fig_s))
-
-    return figures
+    return {"metrics": fig_m, "scatter": fig_s}
 
 
-def make_tables(
-    groups: SimulationGroups,
-    max_clients: int,
-) -> dict[tuple[str, str], str]:
-    """Return the simulation history tables as a string."""
+def make_tables(groups: SimGroups, spec: Spec) -> dict[str, str]:
+    """Return simulation history tables (one per strategy) for a spec."""
+    strategies = sorted({strategy for _, strategy in groups})
 
-    controls = sorted({control for _, _, control in groups})
-    strategies = sorted({strategy for _, strategy, _ in groups})
-
-    client_nums = sorted(get_client_nums(max_clients))
+    client_nums = sorted(get_client_nums(spec.max_clients))
     smallest_interesting = next(
         (n for n in client_nums if n > 2),
         2 if 2 in client_nums else 1,
     )
 
-    tables: dict[tuple[str, str], str] = {}
-    for strategy, control in product(strategies, controls):
-        sim = groups[(smallest_interesting, strategy, control)][0]  # pick first repetition as representative
+    tables: dict[str, str] = {}
+    for strategy in strategies:
+        # pick an arbitrary (the first) repetition from the smallest interesting client count
+        sim = groups[(smallest_interesting, strategy)][0]
         table = tabulate(
             (
                 (
@@ -675,45 +633,6 @@ def make_tables(
             ),
             headers=["time", "client_id", "event_type", "event_detail"],
         )
-        tables[(strategy, control)] = table
+        tables[strategy] = table
 
     return tables
-
-
-def run(
-    max_clients: int,
-    constant: float,
-    expo_base: float,
-    expo_cap: float,
-    network_mu: float,
-    network_sigma: float,
-    write_mu: float,
-    write_sigma: float,
-    limit: int,
-    window: float,
-    repeat: int,
-    work_to_duration: float,
-) -> None:
-    groups = simulate(
-        max_clients,
-        constant,
-        expo_base,
-        expo_cap,
-        network_mu,
-        network_sigma,
-        write_mu,
-        write_sigma,
-        limit,
-        window,
-        repeat,
-        work_to_duration,
-    )
-
-    figs = make_figures(groups, max_clients, work_to_duration)
-    for kind, figs_ in figs.items():
-        for control, fig in figs_:
-            fig.savefig(f"{control}_{kind}.png")
-
-    tables = make_tables(groups, max_clients)
-    for (strategy, control), table in tables.items():
-        print(f"{control} + {strategy}\n\n{table}\n")

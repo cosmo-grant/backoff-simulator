@@ -1,0 +1,65 @@
+# Each [[simulation]] block defines one concurrency control and one or more backoff strategies.
+
+[[simulation]]
+max_clients = 50
+repeat = 20
+network_mu = 10.0
+network_sigma = 2.0
+work_to_duration = 1.0
+control = "ThrottlingServer"
+limit = 5
+window = 10.0
+strategies = [
+  { type = "Constant", constant = 0.5 },
+  { type = "Expo", base = 2.0, cap = 1000.0 },
+  { type = "FullJitteredExpo", base = 2.0, cap = 1000.0 },
+  { type = "EqualJitteredExpo", base = 2.0, cap = 1000.0 },
+]
+
+[[simulation]]
+max_clients = 50
+repeat = 20
+network_mu = 10.0
+network_sigma = 2.0
+work_to_duration = 2.0
+control = "LockingServer"
+write_mu = 2.0
+write_sigma = 1.0
+strategies = [
+  { type = "Constant", constant = 0.5 },
+  { type = "Expo", base = 2.0, cap = 1000.0 },
+  { type = "FullJitteredExpo", base = 2.0, cap = 1000.0 },
+  { type = "EqualJitteredExpo", base = 2.0, cap = 1000.0 },
+]
+
+[[simulation]]
+max_clients = 50
+repeat = 20
+network_mu = 10.0
+network_sigma = 2.0
+work_to_duration = 1.0
+control = "WriteOnlyOCCServer"
+write_mu = 2.0
+write_sigma = 1.0
+strategies = [
+  { type = "Constant", constant = 0.5 },
+  { type = "Expo", base = 2.0, cap = 1000.0 },
+  { type = "FullJitteredExpo", base = 2.0, cap = 1000.0 },
+  { type = "EqualJitteredExpo", base = 2.0, cap = 1000.0 },
+]
+
+[[simulation]]
+max_clients = 50
+repeat = 20
+network_mu = 10.0
+network_sigma = 2.0
+work_to_duration = 1.0
+control = "ReadWriteOCCServer"
+write_mu = 2.0
+write_sigma = 1.0
+strategies = [
+  { type = "Constant", constant = 0.5 },
+  { type = "Expo", base = 2.0, cap = 1000.0 },
+  { type = "FullJitteredExpo", base = 2.0, cap = 1000.0 },
+  { type = "EqualJitteredExpo", base = 2.0, cap = 1000.0 },
+]

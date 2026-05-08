@@ -1,29 +1,33 @@
 from argparse import ArgumentParser
+from pathlib import Path
 
-from .simulation import run
+import matplotlib.pyplot as plt
 
-parser = ArgumentParser()
-parser.add_argument("--max-clients", type=int, default=50)
-parser.add_argument("--constant", type=float, default=0.5)
-parser.add_argument("--expo-base", type=float, default=2)
-parser.add_argument("--expo-cap", type=float, default=1000)
-parser.add_argument("--network-mu", type=float, default=10)
-parser.add_argument("--network-sigma", type=float, default=2)
-parser.add_argument("--write-mu", type=float, default=2)
-parser.add_argument("--write-sigma", type=float, default=1)
-parser.add_argument("--repeat", type=int, default=20)
-parser.add_argument("--work-to-duration", type=float, default=1)
+from .config import load_config
+from .simulation import make_figures, make_tables, simulate
+
+parser = ArgumentParser(description="Run backoff simulations configured via a toml file.")
+parser.add_argument("--config-file", type=Path, default="simulations.toml", help="Path to config file.")
 
 
 def app() -> None:
     args = parser.parse_args()
-    args = vars(args)
 
-    # crude validation, e.g. max_clients should not be 0, but good enough
-    if not all(v >= 0 for v in args.values()):
-        parser.error(f"All values must be non-negative.\nGiven: {args}")
+    specs = load_config(args.config_file)
+    for spec in specs:
+        groups = simulate(spec)
 
-    run(**args)
+        figures = make_figures(groups, spec)
+        for kind, fig in figures.items():
+            filename = f"{spec.control}_{kind}.png"
+            fig.savefig(filename)
+            plt.close(fig)
+
+        tables = make_tables(groups, spec)
+        for strategy, table in tables.items():
+            print(f"\n{spec.control} + {strategy}\n")
+            print(table)
+            print()
 
 
 if __name__ == "__main__":

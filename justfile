@@ -3,7 +3,6 @@ checks:
   ruff check --fix
   ruff format
   marimo check --fix notebook.py
-  uv run backoff-simulator --repeat 2 --max-clients 3
 
 # same params as aws simulation
 # aws doesn't model write delay, so we set it to 0
