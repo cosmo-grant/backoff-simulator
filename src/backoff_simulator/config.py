@@ -17,6 +17,7 @@ class BackoffConfig:
 class Spec:
     """A specification of all simulation parameters."""
 
+    title: str
     max_clients: int
     repeat: int
     network_mu: float
@@ -37,6 +38,7 @@ def load_config(path: Path) -> list[Spec]:
 
 def parse_spec(spec: dict) -> Spec:
     # These keys are required.
+    title = spec.pop("title")
     max_clients = spec.pop("max_clients")
     repeat = spec.pop("repeat")
     network_mu = spec.pop("network_mu")
@@ -51,6 +53,7 @@ def parse_spec(spec: dict) -> Spec:
     strategies = [parse_strategy(s) for s in strategies]
 
     return Spec(
+        title=title,
         max_clients=max_clients,
         repeat=repeat,
         network_mu=network_mu,

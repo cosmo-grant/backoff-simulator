@@ -1,6 +1,7 @@
 # Each [[simulation]] block defines one concurrency control and one or more backoff strategies.
 
 [[simulation]]
+title = "ThrottlingServer"
 max_clients = 50
 repeat = 20
 network_mu = 10.0
@@ -16,6 +17,7 @@ strategies = [
 ]
 
 [[simulation]]
+title = "LockingServer"
 max_clients = 50
 repeat = 20
 network_mu = 10.0
@@ -31,6 +33,7 @@ strategies = [
 ]
 
 [[simulation]]
+title = "WriteOnlyOCCServer"
 max_clients = 50
 repeat = 20
 network_mu = 10.0
@@ -46,6 +49,7 @@ strategies = [
 ]
 
 [[simulation]]
+title = "ReadWriteOCCServer"
 max_clients = 50
 repeat = 20
 network_mu = 10.0

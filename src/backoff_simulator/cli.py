@@ -19,13 +19,13 @@ def app() -> None:
 
         figures = make_figures(groups, spec)
         for kind, fig in figures.items():
-            filename = f"{spec.control}_{kind}.png"
+            filename = f"{spec.title}_{kind}.png"
             fig.savefig(filename)
             plt.close(fig)
 
         tables = make_tables(groups, spec)
         for strategy, table in tables.items():
-            print(f"\n{spec.control} + {strategy}\n")
+            print(f"\n{spec.title} + {strategy}\n")
             print(table)
             print()
 
