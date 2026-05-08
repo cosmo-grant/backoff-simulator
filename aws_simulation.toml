@@ -1,0 +1,17 @@
+# Same params as the aws simulation.
+# https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter
+
+[[simulation]]
+max_clients = 200
+repeat = 50
+network_mu = 10.0
+network_sigma = 2.0
+write_mu = 0.0
+write_sigma = 0.0
+work_to_duration = 1.0
+control = "ReadWriteOCCServer"
+strategies = [
+  { type = "Constant", constant = 0.0 },
+  { type = "FullJitteredExpo", base = 5.0, cap = 2000.0 },
+  { type = "EqualJitteredExpo", base = 5.0, cap = 2000.0 },
+]

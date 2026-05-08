@@ -8,13 +8,4 @@ checks:
 # aws doesn't model write delay, so we set it to 0
 # aws repeats 100 times but my machine can't cope with that
 aws-params:
-  uv run backoff-simulator \
-    --max-clients 200 \
-    --constant 0 \
-    --expo-base 5 \
-    --expo-cap 2000 \
-    --network-mu 10 \
-    --network-sigma 2 \
-    --write-mu 0 \
-    --write-sigma 0 \
-    --repeat 50
+  uv run backoff-simulator --config-file aws_simulation.toml
