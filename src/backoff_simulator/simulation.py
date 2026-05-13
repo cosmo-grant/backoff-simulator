@@ -583,8 +583,7 @@ def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
     fig_m.tight_layout()
 
     # Scatter figure: one subplot per strategy.
-    nrows = (len(strategies) + 1) // 2
-    fig_s, axes_s = plt.subplots(nrows, 2, squeeze=False, figsize=(10, 5 * nrows))
+    fig_s, axes_s = plt.subplots(len(strategies), 1, squeeze=False, figsize=(10, 5 * len(strategies)))
     axes_flat = axes_s.flatten()
     for ax in axes_flat[len(strategies) :]:
         ax.set_visible(False)
