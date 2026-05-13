@@ -31,11 +31,7 @@ def _(mo):
 
     So there’s a tradeoff.
 
-    The _cost_ is an overall performance measure, got via a work-to-duration exchange rate:
-
-    $$
-    \text{work_to_duration} \cdot \text{work} + \text{duration}
-    $$
+    The _cost_ is an overall performance measure, got via an exchange rate: $\text{work-to-duration} \cdot \text{work} + \text{duration}$.
 
     Which backoff strategy minimizes the cost?
 
