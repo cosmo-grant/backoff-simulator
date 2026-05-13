@@ -569,7 +569,7 @@ def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
         ("duration (avg)", "duration"),
         ("cost (avg)", "cost"),
     ]
-    fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5))
+    fig_m, axes_m = plt.subplots(1, len(metric_specs), figsize=(5 * len(metric_specs), 5), layout="constrained")
     for ax, (ylabel, attr) in zip(axes_m, metric_specs, strict=True):
         for strategy in strategies:
             xs = get_client_nums(spec.max_clients)
@@ -580,10 +580,9 @@ def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         ax.legend()
     fig_m.suptitle(spec.control)
-    fig_m.tight_layout()
 
     # Scatter figure: one subplot per strategy.
-    fig_s, axes_s = plt.subplots(len(strategies), 1, squeeze=False, figsize=(10, 5 * len(strategies)))
+    fig_s, axes_s = plt.subplots(len(strategies), 1, squeeze=False, figsize=(10, 5 * len(strategies)), layout="constrained")
     axes_flat = axes_s.flatten()
     for ax in axes_flat[len(strategies) :]:
         ax.set_visible(False)
@@ -601,7 +600,6 @@ def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
         ax.set_ylabel("client id")
         ax.tick_params(axis="y", which="both", left=False, labelleft=False)
     fig_s.suptitle(spec.control)
-    fig_s.tight_layout()
 
     return {"metrics": fig_m, "scatter": fig_s}
 
