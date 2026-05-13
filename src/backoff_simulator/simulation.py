@@ -565,7 +565,7 @@ def make_figures(groups: SimGroups, spec: Spec) -> dict[str, plt.Figure]:
 
     # Metrics figure: one subplot per metric, one line per strategy.
     metric_specs = [
-        ("total requests (avg)", "requests"),
+        ("work (avg)", "requests"),
         ("duration (avg)", "duration"),
         ("cost (avg)", "cost"),
     ]
