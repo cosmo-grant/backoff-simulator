@@ -35,10 +35,7 @@ def _(mo):
 
     Which backoff strategy minimizes the cost?
 
-    There's a well-known aws blog post and simulation about this, focusing on Optimistic Concurrency Control:
-    - https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter
-    - https://github.com/aws-samples/aws-arch-backoff-simulator
-
+    There's a well-known aws [blog post](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter) and [simulation](https://github.com/aws-samples/aws-arch-backoff-simulator) about this, focusing on optimistic concurrency control.
     This app is based on those.
     But I re-implemented the simulation and added more controls.
 
@@ -165,6 +162,7 @@ def _(mo, results):
         for strategy, table in tables.items():
             output += f"**{strategy}**\n\n```\n{table}\n```\n\n"
         return mo.md(output)
+
 
     mo.ui.tabs({spec.title: _concatenate(tables) for spec, _, tables in results})
     return
