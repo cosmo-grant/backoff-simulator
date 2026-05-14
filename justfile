@@ -1,8 +1,7 @@
 checks:
-  ty check --exclude notebook.py
-  ruff check --fix --exclude notebook.py
+  ty check
+  ruff check --fix
   ruff format
-  marimo check --fix notebook.py
 
 # same params as aws simulation
 # aws doesn't model write delay, so we set it to 0
