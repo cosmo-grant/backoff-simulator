@@ -81,14 +81,14 @@ backoff-simulator
 
 You can name your config file something else and pass it via `--config-file path/to/file`.
 
-For each `[[simulation]]` block, the simulator writes `&lt;title>.png`, e.g.
+For each `[[simulation]]` block, the simulator writes `<title>.png`, e.g.
 
-![Metrics plot for LockingServer](/assets/images/Locking Example_metrics.png)
+![Metrics plot for LockingServer](/assets/images/Locking_Example_metrics.png)
 
 showing work, duration and cost against number of clients, averaging across repetitions,
-and `&lt;title>_scatter.png`, e.g.
+and `<title>_scatter.png`, e.g.
 
-![Scatter plot for LockingServer](/assets/images/Locking Example_scatter.png)
+![Scatter plot for LockingServer](/assets/images/Locking_Example_scatter.png)
 
 showing the distribution of client requests over time, for some simulation at `max_clients`.
 
