@@ -1,5 +1,3 @@
-# Each [[simulation]] block defines one concurrency control and one or more backoff strategies.
-
 [[simulation]]
 title = "ThrottlingServer"
 max_clients = 50
