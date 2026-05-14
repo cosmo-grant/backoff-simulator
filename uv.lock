@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.14"
 
 [options]
-exclude-newer = "2026-05-07T14:51:22.856411386Z"
+exclude-newer = "2026-05-07T15:06:48.665042401Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
@@ -21,7 +21,7 @@ wheels = [
 
 [[package]]
 name = "backoff-simulator"
-version = "0.1.1"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
