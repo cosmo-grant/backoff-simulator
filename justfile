@@ -1,6 +1,6 @@
 checks:
   ty check --exclude notebook.py
-  ruff check --fix
+  ruff check --fix --exclude notebook.py
   ruff format
   marimo check --fix notebook.py
 
