@@ -96,121 +96,66 @@ showing the distribution of client requests over time, for some repetition at `m
 And it writes representative event histories to stdout, e.g.
 
 ```text
-Locking_Example + Constant
+ReadWriteOCCServer + FullJitteredExpo
 
-  time    client_id  event_type             event_detail
-------  -----------  ---------------------  --------------
-  0               0  client_requests_write
-  0               2  client_requests_write
-  0               5  client_requests_write
-  0               1  client_requests_write
-  0               4  client_requests_write
-  0               3  client_requests_write
-  8               2  server_accepts
-  8.17            4  server_rejects
-  8.64            0  server_rejects
-  9.55            2  server_commits
- 12.32            5  server_accepts
- 12.39            3  server_rejects
- 13.85            1  server_rejects
- 14.01            0  client_backs_off
- 14.04            5  server_commits
- 14.51            0  client_requests_write
- 18.43            4  client_backs_off
- 18.93            4  client_requests_write
- 20.95            3  client_backs_off
- 21.45            3  client_requests_write
- 22.62            1  client_backs_off
- 23.12            1  client_requests_write
- 25.22            0  server_accepts
- 26.72            4  server_rejects
- 28.45            0  server_commits
- 33.88            3  server_accepts
- 35.6             1  server_rejects
- 36.52            3  server_commits
- 38.87            4  client_backs_off
- 39.37            4  client_requests_write
- 45.68            1  client_backs_off
- 46.18            1  client_requests_write
- 49.82            4  server_accepts
- 51.52            4  server_commits
- 57.53            1  server_accepts
- 58.53            1  server_commits
-
-
-Locking_Example + EqualJitteredExpo
-
-  time    client_id  event_type             event_detail
-------  -----------  ---------------------  --------------
-  0               0  client_requests_write
-  0               2  client_requests_write
-  0               5  client_requests_write
-  0               1  client_requests_write
-  0               4  client_requests_write
-  0               3  client_requests_write
-  6.82            2  server_accepts
-  8.49            3  server_rejects
-  8.6             1  server_rejects
- 10.57            2  server_commits
- 11.84            4  server_accepts
- 12.2             0  server_rejects
- 12.55            5  server_rejects
- 13.37            4  server_commits
- 17.39            1  client_backs_off
- 19.24            1  client_requests_write
- 21.91            3  client_backs_off
- 22.58            0  client_backs_off
- 22.75            5  client_backs_off
- 22.96            3  client_requests_write
- 24.02            0  client_requests_write
- 24.23            5  client_requests_write
- 28.14            1  server_accepts
- 30.15            1  server_commits
- 32.1             3  server_accepts
- 34.18            3  server_commits
- 34.34            0  server_accepts
- 34.47            5  server_rejects
- 36.23            0  server_commits
- 46.4             5  client_backs_off
- 48.99            5  client_requests_write
- 59.03            5  server_accepts
- 61.55            5  server_commits
-
-
-Locking_Example + FullJitteredExpo
-
-  time    client_id  event_type             event_detail
-------  -----------  ---------------------  --------------
-  0               0  client_requests_write
-  0               2  client_requests_write
-  0               5  client_requests_write
-  0               1  client_requests_write
-  0               4  client_requests_write
-  0               3  client_requests_write
-  8.07            1  server_accepts
-  8.23            2  server_rejects
-  9.54            4  server_rejects
- 10.04            0  server_rejects
- 11.79            1  server_commits
- 13.53            5  server_accepts
- 13.57            5  server_commits
- 13.59            3  server_accepts
- 14.37            3  server_commits
- 18.17            4  client_backs_off
- 19.41            4  client_requests_write
- 20.26            2  client_backs_off
- 21.31            0  client_backs_off
- 22.11            2  client_requests_write
- 22.66            0  client_requests_write
- 27.18            4  server_accepts
- 31.76            4  server_commits
- 34.23            0  server_accepts
- 34.67            2  server_rejects
- 36.48            0  server_commits
- 46.65            2  client_backs_off
- 48.49            2  client_requests_write
- 55.36            2  server_accepts
- 58.1             2  server_commits
+  time    client_id  event_type                 event_detail
+------  -----------  -------------------------  --------------
+  0               0  client_requests_version
+  0               2  client_requests_version
+  0               3  client_requests_version
+  0               1  client_requests_version
+  8.86            1  server_reports_version     version=0
+  8.98            3  server_reports_version     version=0
+ 10.56            2  server_reports_version     version=0
+ 11.75            0  server_reports_version     version=0
+ 20.18            2  client_requests_write
+ 20.66            3  client_requests_write
+ 21.4             0  client_requests_write
+ 23.65            1  client_requests_write
+ 30.2             2  server_tentatively_writes
+ 31.68            0  server_tentatively_writes
+ 32.64            2  server_commits             version=1
+ 33.57            1  server_tentatively_writes
+ 34.56            3  server_tentatively_writes
+ 34.77            0  server_aborts
+ 36.53            1  server_aborts
+ 36.88            3  server_aborts
+ 43.65            1  client_backs_off
+ 44.07            1  client_requests_version
+ 44.74            0  client_backs_off
+ 45.34            0  client_requests_version
+ 46.26            3  client_backs_off
+ 47.69            3  client_requests_version
+ 54.71            1  server_reports_version     version=1
+ 54.99            0  server_reports_version     version=1
+ 58.69            3  server_reports_version     version=1
+ 61.39            1  client_requests_write
+ 65.63            0  client_requests_write
+ 70.46            1  server_tentatively_writes
+ 71.22            3  client_requests_write
+ 72.87            1  server_commits             version=2
+ 78.01            3  server_tentatively_writes
+ 78.26            0  server_tentatively_writes
+ 78.42            0  server_aborts
+ 81.39            3  server_aborts
+ 90.07            0  client_backs_off
+ 91.64            3  client_backs_off
+ 92.93            3  client_requests_version
+ 94.07            0  client_requests_version
+103.78            3  server_reports_version     version=2
+104.66            0  server_reports_version     version=2
+116.85            0  client_requests_write
+117.2             3  client_requests_write
+125.87            0  server_tentatively_writes
+127.3             0  server_commits             version=3
+129.57            3  server_tentatively_writes
+130.6             3  server_aborts
+137.96            3  client_backs_off
+144.12            3  client_requests_version
+156.04            3  server_reports_version     version=3
+166.02            3  client_requests_write
+176.92            3  server_tentatively_writes
+177.92            3  server_commits             version=4
 ```
 
 ## Concurrency controls
