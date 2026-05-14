@@ -143,19 +143,19 @@ def _(editor, make_figures, make_tables, mo, parse_spec, simulate, tomllib):
     return (results,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, results):
     mo.ui.tabs({spec.title: figs["metrics"] for spec, figs, _ in results})
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, results):
     mo.ui.tabs({spec.title: figs["scatter"] for spec, figs, _ in results})
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, results):
     def _concatenate(tables):
         output = ""
@@ -217,7 +217,7 @@ def _(mo):
 
     Each client backs off and retries until its request is accepted.
     The app can simulate various backoff strategies.
-    ($n = 0, 1, 2, ...$ is the attempt number.)
+    $n = 0, 1, 2, ...$ is the attempt number.
 
     **Constant**
     - $c$
