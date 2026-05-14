@@ -83,13 +83,13 @@ You can name your config file something else and pass it via `--config-file path
 
 For each `[[simulation]]` block, the app writes `<title>_metrics.png`, e.g.
 
-![Metrics plot for LockingServer](/assets/images/Locking_Example_metrics.png)
+![Metrics plot for LockingServer](https://raw.githubusercontent.com/cosmo-grant/backoff-simulator/main/assets/images/Locking_Example_metrics.png)
 
 showing work, duration and cost against number of clients, averaging across repetitions.
 
 It also writes `<title>_scatter.png`, e.g.
 
-![Scatter plot for LockingServer](/assets/images/Locking_Example_scatter.png)
+![Scatter plot for LockingServer](https://raw.githubusercontent.com/cosmo-grant/backoff-simulator/main/assets/images/Locking_Example_scatter.png)
 
 showing the distribution of client requests over time, for some repetition at `max_clients`.
 
