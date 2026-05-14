@@ -81,21 +81,22 @@ backoff-simulator
 
 You can name your config file something else and pass it via `--config-file path/to/file`.
 
-For each `[[simulation]]` block, the simulator writes `<title>.png`, e.g.
+For each `[[simulation]]` block, the app writes `<title>_metrics.png`, e.g.
 
 ![Metrics plot for LockingServer](/assets/images/Locking_Example_metrics.png)
 
-showing work, duration and cost against number of clients, averaging across repetitions,
-and `<title>_scatter.png`, e.g.
+showing work, duration and cost against number of clients, averaging across repetitions.
+
+It also writes `<title>_scatter.png`, e.g.
 
 ![Scatter plot for LockingServer](/assets/images/Locking_Example_scatter.png)
 
-showing the distribution of client requests over time, for some simulation at `max_clients`.
+showing the distribution of client requests over time, for some repetition at `max_clients`.
 
-It also writes representative event histories to stdout, e.g.
+And it writes representative event histories to stdout, e.g.
 
 ```text
-Locking Example + Constant
+Locking_Example + Constant
 
   time    client_id  event_type             event_detail
 ------  -----------  ---------------------  --------------
@@ -137,7 +138,7 @@ Locking Example + Constant
  58.53            1  server_commits
 
 
-Locking Example + EqualJitteredExpo
+Locking_Example + EqualJitteredExpo
 
   time    client_id  event_type             event_detail
 ------  -----------  ---------------------  --------------
@@ -176,7 +177,7 @@ Locking Example + EqualJitteredExpo
  61.55            5  server_commits
 
 
-Locking Example + FullJitteredExpo
+Locking_Example + FullJitteredExpo
 
   time    client_id  event_type             event_detail
 ------  -----------  ---------------------  --------------
@@ -214,8 +215,7 @@ Locking Example + FullJitteredExpo
 
 ## Concurrency controls
 
-The server accepts or rejects requests, according to its concurrency control.
-The app can simulate various controls.
+The app can simulate various concurrency controls.
 
 The following controls are designed to manage contending writes.
 
@@ -260,14 +260,14 @@ The app can simulate various backoff strategies.
 - e.g. for `constant = 3`, the client backs off for 3, 3, 3, ...
 - this relies entirely on network and write variance to spread out requests
 
-**Capped exponential backoff**
+**Expo**
 - `min(cap, base x 2^n)`
 - e.g. for `cap = 10, b = 2` the client backs off for 2, 4, 8, 10, 10, ...
 
-**Full jittered exponential backoff**
+**FullJitteredExpo**
 - `U(0, min(cap, base x 2^n))`
 - i.e. a value picked uniformly at random between 0 and the capped exponential backoff
 
-**Equal jittered exponential backoff**
+**EqualJitteredExpo**
 - `min(cap, base x 2^n)) / 2 + U(0, min(cap, base x 2^n) / 2)`
 - i.e. half the capped exponential backoff, plus a value picked uniformly at random between 0 and half the capped exponential backoff
